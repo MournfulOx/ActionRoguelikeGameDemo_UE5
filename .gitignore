@@ -77,5 +77,4 @@ Plugins/**/Intermediate/*
 # Cache files for the editor to use
 DerivedDataCache/*
 
-# UE Content assets (binary files, use Git LFS if needed)
-Content/
+# UE Content assets tracked via Git LFS
