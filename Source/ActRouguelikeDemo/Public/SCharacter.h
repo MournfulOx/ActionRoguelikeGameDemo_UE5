@@ -6,6 +6,9 @@
 #include "GameFramework/Character.h"
 #include "SCharacter.generated.h"
 
+class UCameraComponent;
+class USpringArmComponent;
+
 UCLASS()
 class ACTROUGUELIKEDEMO_API ASCharacter : public ACharacter
 {
@@ -16,6 +19,12 @@ public:
 	ASCharacter();
 
 protected:
+	
+	UPROPERTY(VisibleAnywhere)
+	USpringArmComponent* SpringArmComp;
+	
+	UPROPERTY(VisibleAnywhere)
+	UCameraComponent* CameraComp;
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
@@ -23,6 +32,7 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
+	void MoveForward(float value);
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
