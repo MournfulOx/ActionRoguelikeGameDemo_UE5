@@ -19,12 +19,17 @@ public:
 	ASCharacter();
 
 protected:
-	
+
 	UPROPERTY(VisibleAnywhere)
 	USpringArmComponent* SpringArmComp;
-	
+
 	UPROPERTY(VisibleAnywhere)
 	UCameraComponent* CameraComp;
+
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<AActor> ProjectileClass;
+
+	
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
@@ -33,6 +38,9 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	void MoveForward(float value);
+	void MoveRight(float value);
+	void PrimaryAttack();
+
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
