@@ -12,7 +12,7 @@
 - [Tech Stack](#tech-stack)
 - [Implemented Systems](#implemented-systems)
 - [Project Structure](#project-structure)
-- [Development Log](#development-log)
+- [Development History](#development-history--开发历程)
 - [Building & Running](#building--running)
 - [Roadmap](#roadmap)
 
@@ -125,29 +125,11 @@ Source/ActRouguelikeDemo/
 
 ---
 
-## Development Log
+## Development History / 开发历程
 
-### Phase 1 — Project Bootstrap
-- Initialized UE5 C++ project; configured `.gitignore` and Git LFS tracking for `.uasset` / `.umap` binary assets
-- Established `Public/Private` source layout and module build rules in `ActRouguelikeDemo.Build.cs`
+See [Releases](../../releases) for the full changelog with screenshots and build notes.
 
-### Phase 2 — Character & Camera
-- Implemented `ASCharacter` with Spring Arm + Camera rig
-- Wired legacy input axes for WASD movement and mouse look
-- Fixed right-strafe direction by extracting the Y-axis from `FRotationMatrix` instead of using the forward vector's cross product — ensures correct strafe at all camera angles
-
-### Phase 3 — Combat: Projectile & Explosive Barrel
-- Built `AAMagicProjectile` with `UProjectileMovementComponent`, particle effects, and dual collision response (blocking destroy vs. overlap damage)
-- Built `AExplosiveBarrel` with physics simulation and `URadialForceComponent`; wired `TakeDamage` to fire the radial impulse, creating a chain-reaction feel when hit by projectiles
-- Added animation montage support and socket-based projectile spawning with a `FTimerHandle` delay to sync with the attack animation
-
-### Phase 4 — Interaction System
-- Defined `ISGameplayInterface` using UE5's `UINTERFACE` / `BlueprintNativeEvent` pattern for decoupled, Blueprint-extensible interaction contracts
-- Implemented `USInteractionComponent` using `SweepMultiByObjectType` (sphere sweep) for more forgiving detection than a single line trace
-- Added `DrawDebugHelpers` visualization for rapid iteration and debugging of trace geometry
-- Implemented `ASItemChest` as the first interactable actor; resolved two compile errors:
-  - `MyPawn()` — extra `()` attempted to call a pointer variable as a function (C2064)
-  - `Implements<ISGameplayInterface>()` — must use the `U`-prefixed reflection class (`USGameplayInterface`) not the `I`-prefixed interface class (C2039)
+完整的版本历史、截图与开发笔记见 [Releases](../../releases) 页面。
 
 ---
 
