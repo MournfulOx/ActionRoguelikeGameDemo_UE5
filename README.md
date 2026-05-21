@@ -127,9 +127,9 @@ Source/ActRouguelikeDemo/
 
 ## Development History / 开发历程
 
-See [Releases](../../releases) for the full changelog with screenshots and build notes.
+See [Releases](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/releases) for the full changelog with screenshots and build notes.
 
-完整的版本历史、截图与开发笔记见 [Releases](../../releases) 页面。
+完整的版本历史、截图与开发笔记见 [Releases](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/releases) 页面。
 
 ---
 
@@ -139,7 +139,7 @@ See [Releases](../../releases) for the full changelog with screenshots and build
 
 ```powershell
 # 1. Clone the repository
-git clone <repo-url>
+git clone https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5.git
 cd ActionRoguelikeGameDemo_UE5
 
 # 2. Right-click the .uproject → "Generate Visual Studio project files"
