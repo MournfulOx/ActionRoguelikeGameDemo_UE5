@@ -50,21 +50,30 @@ This project is a hands-on learning demo built while studying Unreal Engine 5 C+
 - Attack driven by `UAnimMontage` + `FTimerHandle`: the montage plays first, then the projectile spawns at the correct animation frame (0.2 s delay) from the `Muzzle_01` skeletal socket
 - Delegates attack and interaction to dedicated components, keeping `ASCharacter` thin
 
-### 2. Magic Projectile (`AAMagicProjectile`)
+### 2. Magic Projectile (`AAMagicProjectile` + `BP_MagicProjectile`)
 
+**C++ layer:**
 - `USphereComponent` with `"Projectile"` collision profile as the root
 - `UProjectileMovementComponent`: initial speed 1000 cm/s, zero gravity, velocity-aligned rotation
 - `UParticleSystemComponent` for in-flight VFX
 - Dual hit response:
-  - **Blocking hit** (`NotifyHit`): applies 20 point damage to the hit actor; visual effect and self-destruction are handled by Blueprint's `On Component Hit` — this path handles physics-simulated actors such as the explosive barrel, which use Block collision
-  - **Overlap hit** (`OnActorOverlap`): applies 20 point damage via `UGameplayStatics::ApplyPointDamage`, then destroys self — for actors configured to Overlap with the projectile channel (e.g. enemies)
+  - **Blocking hit** (`NotifyHit`): applies 20 point damage to the hit actor — handles physics-simulated actors such as the explosive barrel, which use Block collision
+  - **Overlap hit** (`OnActorOverlap`): applies 20 point damage via `UGameplayStatics::ApplyPointDamage`, then destroys self — for actors configured to Overlap with the projectile channel
 
-### 3. Explosive Barrel (`AExplosiveBarrel`)
+**Blueprint layer (`BP_MagicProjectile`):**
+- `On Component Hit` event: spawns impact particle effect and destroys the projectile on any blocking collision
+- Instigator ignored via `Ignore Actor when Moving` on `BeginPlay` to prevent self-collision
 
+### 3. Explosive Barrel (`AExplosiveBarrel` + `BP_ExplosiveBarrel`)
+
+**C++ layer:**
 - `UStaticMeshComponent` with `SetSimulatePhysics(true)` as root — fully physics-simulated rigid body
 - `URadialForceComponent`: radius 750 cm, `bImpulseVelChange = true` (mass-independent velocity change), `bAutoActivate = false` (manual trigger only)
-- `Explode()` (`public`, `BlueprintCallable`): fires the radial impulse and serves as the single entry point for explosion logic (particle effects, sounds can be added here later)
-- `TakeDamage` override: calls `Explode()` when struck, ensuring a single FireImpulse regardless of how damage is delivered
+- `Explode()` (`public`, `BlueprintCallable`): fires the radial impulse — single entry point for explosion logic
+- `TakeDamage` override: calls `Explode()` when struck by a projectile or triggered by a lever
+
+**Blueprint layer (`BP_ExplosiveBarrel`):**
+- Extends `Explode()` with destruction mesh swap and particle effect on detonation
 
 ### 4. Gameplay Interface & Interaction System
 
@@ -72,21 +81,26 @@ This project is a hands-on learning demo built while studying Unreal Engine 5 C+
 
 UE5 `UINTERFACE`-based contract. Declares:
 ```cpp
-UFUNCTION(BlueprintNativeEvent)
+UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 void Interact(APawn* InstigatorPawn);
 ```
 Any actor can opt into the interaction system by implementing this interface — no inheritance coupling to the character or component.
 
 **`USInteractionComponent`**
 
-Attached to the character. On `PrimaryInteract()`:
+Attached to the character. On `PrimaryInteract()` (E key):
 1. Performs a **sphere sweep** (radius 30 cm) from the character's eye point along the aim direction (max 1000 cm) using `SweepMultiByObjectType` against `ECC_WorldDynamic`
 2. Iterates hits; calls `ISGameplayInterface::Execute_Interact(HitActor, InstigatorPawn)` on the first actor that passes `Implements<USGameplayInterface>()`
 3. Renders debug geometry (`DrawDebugSphere`, `DrawDebugLine`) in green on hit, red on miss — visible for 2 s
 
-**`ASItemChest`**
+**`ASItemChest` + `BP_TreasureChest`**
 
-Implements `ISGameplayInterface`. On interact: rotates the `LidMesh` to `TargetPitch` (default 110°) via `SetRelativeRotation`, opening the chest lid.
+C++: implements `ISGameplayInterface`; on interact, rotates `LidMesh` to `TargetPitch` (default 110°) via `SetRelativeRotation`.
+Blueprint: extends with lid-open animation and particle effect on interact.
+
+**`BP_Lever`**
+
+Pure Blueprint actor implementing `ISGameplayInterface`. Triggered by E key via the interaction system; controls one or more target actors (treasure chests or explosive barrels) — calls `Interact` or `Explode()` on targets through Blueprint event graph.
 
 ### 5. Input Bindings
 
