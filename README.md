@@ -56,14 +56,15 @@ This project is a hands-on learning demo built while studying Unreal Engine 5 C+
 - `UProjectileMovementComponent`: initial speed 1000 cm/s, zero gravity, velocity-aligned rotation
 - `UParticleSystemComponent` for in-flight VFX
 - Dual hit response:
-  - **Blocking hit** (`NotifyHit`): destroys self on contact with static geometry (walls, ground)
-  - **Overlap hit** (`OnActorOverlap`): applies 20 point damage via `UGameplayStatics::ApplyPointDamage`, then destroys — allows physics objects and enemies to respond without blocking the projectile path
+  - **Blocking hit** (`NotifyHit`): applies 20 point damage to the hit actor; visual effect and self-destruction are handled by Blueprint's `On Component Hit` — this path handles physics-simulated actors such as the explosive barrel, which use Block collision
+  - **Overlap hit** (`OnActorOverlap`): applies 20 point damage via `UGameplayStatics::ApplyPointDamage`, then destroys self — for actors configured to Overlap with the projectile channel (e.g. enemies)
 
 ### 3. Explosive Barrel (`AExplosiveBarrel`)
 
 - `UStaticMeshComponent` with `SetSimulatePhysics(true)` as root — fully physics-simulated rigid body
 - `URadialForceComponent`: radius 750 cm, `bImpulseVelChange = true` (mass-independent velocity change), `bAutoActivate = false` (manual trigger only)
-- `TakeDamage` override: fires the radial impulse when struck by a projectile, launching nearby objects outward
+- `Explode()` (`public`, `BlueprintCallable`): fires the radial impulse and serves as the single entry point for explosion logic (particle effects, sounds can be added here later)
+- `TakeDamage` override: calls `Explode()` when struck, ensuring a single FireImpulse regardless of how damage is delivered
 
 ### 4. Gameplay Interface & Interaction System
 
