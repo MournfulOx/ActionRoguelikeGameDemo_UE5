@@ -34,8 +34,14 @@ float AExplosiveBarrel::TakeDamage(float DamageAmount, FDamageEvent const& Damag
 {
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	RadialForceComp->FireImpulse();
+	Explode();
 
 	return ActualDamage;
+}
+
+void AExplosiveBarrel::Explode()
+{
+	RadialForceComp->FireImpulse();
+	// 之后可以加粒子、音效等
 }
 

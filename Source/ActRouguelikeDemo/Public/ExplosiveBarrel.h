@@ -18,6 +18,11 @@ class ACTROUGUELIKEDEMO_API AExplosiveBarrel : public AActor
 public:
 	AExplosiveBarrel();
 
+public:
+
+	UFUNCTION(BlueprintCallable)
+	void Explode();
+
 protected:
 
 	UPROPERTY(VisibleAnywhere)

@@ -26,7 +26,12 @@ void AAMagicProjectile::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UP
 								  FVector NormalImpulse, const FHitResult& Hit)
 {
 	Super::NotifyHit(MyComp, Other, OtherComp, bSelfMoved, HitLocation, HitNormal, NormalImpulse, Hit);
-	Destroy();
+
+	if (Other && Other != GetInstigator())
+	{
+		UGameplayStatics::ApplyPointDamage(Other, 20.0f, GetActorForwardVector(),
+			Hit, GetInstigatorController(), this, nullptr);
+	}
 }
 
 void AAMagicProjectile::OnActorOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,

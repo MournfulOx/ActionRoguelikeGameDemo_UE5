@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "AMagicProjectile.generated.h"
 
+
 class USphereComponent;
 class UProjectileMovementComponent;
 class UParticleSystemComponent;
@@ -18,14 +19,17 @@ public:
 
 protected:
 
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	USphereComponent* SphereComp;
 
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UProjectileMovementComponent* MovementComp;
 
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UParticleSystemComponent* EffectComp;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Effects")
+	UParticleSystem* ImpactEffect;
 
 	// 撞到 Block 物体时调用（地面、墙壁），由 ProjectileMovementComponent 直接触发
 	virtual void NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp,
