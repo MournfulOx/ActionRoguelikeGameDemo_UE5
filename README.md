@@ -43,11 +43,7 @@ This project is a hands-on learning demo built while studying Unreal Engine 5 C+
 
 ## Demo
 
-<!-- GIF: Primary Attack -->
-
-<!-- GIF: Blackhole Ability -->
-
-<!-- GIF: Dash Teleport -->
+GIF demos for each ability are attached to the corresponding [GitHub Release](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/releases).
 
 ---
 
