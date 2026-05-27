@@ -27,6 +27,9 @@ Action Roguelike game demo built in UE5 C++. Third-person character with project
 - Always push after committing
 - GIF demos belong in **GitHub Releases** as uploaded assets, NOT embedded in README
 - README links to the Releases page for demos
+- **Every push that adds or modifies features must also update:**
+  - `README.md` — reflect the new/changed systems in Implemented Systems, Controls, Project Structure, and Roadmap
+  - `CLAUDE.md` — update the "Current feature set" and "Roadmap" sections to stay in sync with actual project state
 
 **Code**
 - Prefer C++ for core logic; Blueprint only for VFX/particle/animation extensions on top of C++ classes
