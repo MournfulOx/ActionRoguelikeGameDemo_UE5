@@ -25,11 +25,43 @@ Action Roguelike game demo built in UE5 C++. Third-person character with project
 **Git workflow**
 - Commit all related changes together with a descriptive message
 - Always push after committing
-- GIF demos belong in **GitHub Releases** as uploaded assets, NOT embedded in README
-- README links to the Releases page for demos
 - **Every push that adds or modifies features must also update:**
   - `README.md` — reflect the new/changed systems in Implemented Systems, Controls, Project Structure, and Roadmap
   - `CLAUDE.md` — update the "Current feature set" and "Roadmap" sections to stay in sync with actual project state
+
+**GitHub Release format (match v0.1 exactly every time)**
+- One `###` section per major feature, each with a GIF embedded directly in the notes body via `<img>` tag (NOT as an Assets attachment)
+- GIFs are uploaded by dragging into the GitHub web editor → auto-generates CDN `<img>` link
+- If GIF not yet recorded, use `<!-- 录好后拖入 GitHub 编辑器替换此注释 -->` as placeholder
+- Fixed footer: Tech Stack line → course credit line → `**Full Changelog**` link
+- `gh` CLI: `& "C:\Program Files\GitHub CLI\gh.exe"` (not in PATH)
+
+Release notes template:
+```
+## vX.X — Title
+
+### Feature A
+<!-- placeholder or <img> -->
+
+### Feature B
+<!-- placeholder or <img> -->
+
+---
+
+### What's in this build
+- **System** — description
+
+### Tech Stack
+Unreal Engine 5.6 · C++ · Blueprints · Git LFS
+
+---
+
+*Based on Tom Looman's UE5 C++ Action Roguelike course, also taught at Stanford as CS193U.*
+
+---
+
+**Full Changelog**: https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/commits/vX.X
+```
 
 **Code**
 - Prefer C++ for core logic; Blueprint only for VFX/particle/animation extensions on top of C++ classes
