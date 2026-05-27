@@ -29,7 +29,7 @@ Action Roguelike game demo built in UE5 C++. Third-person character with project
   - `README.md` — reflect the new/changed systems in Implemented Systems, Controls, Project Structure, and Roadmap
   - `CLAUDE.md` — update the "Current feature set" and "Roadmap" sections to stay in sync with actual project state
 
-**GitHub Release format (match v0.1 exactly every time)**
+**GitHub Release format (参考 v0.1 风格，根据内容灵活调整)**
 - One `###` section per major feature, each with a GIF embedded directly in the notes body via `<img>` tag (NOT as an Assets attachment)
 - GIFs are uploaded by dragging into the GitHub web editor → auto-generates CDN `<img>` link
 - If GIF not yet recorded, use `<!-- 录好后拖入 GitHub 编辑器替换此注释 -->` as placeholder
