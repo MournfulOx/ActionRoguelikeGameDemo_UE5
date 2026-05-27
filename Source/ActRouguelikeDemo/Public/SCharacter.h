@@ -33,14 +33,24 @@ protected:
 	UPROPERTY(EditAnywhere)
 	USInteractionComponent* InteractionComp;
 	
+	// Primary Attack
 	UPROPERTY(EditAnywhere, Category = "Attack")
 	TSubclassOf<AActor> ProjectileClass;
+	
+	// Blackhole Attack
+	UPROPERTY(EditAnywhere, Category = "Attack")
+	TSubclassOf<AActor> BlackholeProjectileClass;
+
+	// Dash Attack
+	UPROPERTY(EditAnywhere, Category = "Attack")
+	TSubclassOf<AActor> DashProjectileClass;
 	
 	UPROPERTY(EditAnywhere, Category = "Attack")
 	UAnimMontage* AttackAnim;
 
 	FTimerHandle TimerHandle_PrimaryAttack;
-
+	FTimerHandle TimerHandle_BlackholeAttack;
+	FTimerHandle TimerHandle_DashAttack;
 	
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -52,6 +62,10 @@ public:
 	void MoveForward(float value);
 	void MoveRight(float value);
 	void PrimaryAttack();
+	void BlackholeAttack();
+	void BlackholeAttack_TimeElapsed();
+	void DashAttack();
+	void DashAttack_TimeElapsed();
 	void PrimaryInteract();
 	void PrimaryAttack_TimeElapsed();
 

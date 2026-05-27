@@ -1,8 +1,8 @@
 # Action Roguelike Game Demo — Unreal Engine 5
 
-> A third-person action game built from scratch in C++ with Unreal Engine 5, demonstrating core gameplay systems including character locomotion, projectile combat, physics-driven destruction, and an interface-based interaction framework.
+> A third-person action game built from scratch in C++ with Unreal Engine 5, demonstrating core gameplay systems including character locomotion, projectile combat, special abilities, physics-driven destruction, and an interface-based interaction framework.
 
-> 使用 C++ 与 Unreal Engine 5 从零构建的第三人称动作游戏 Demo，展示了角色运动、弹道战斗、物理破坏与基于接口的交互框架等核心游戏系统。
+> 使用 C++ 与 Unreal Engine 5 从零构建的第三人称动作游戏 Demo，展示了角色运动、弹道战斗、特殊能力、物理破坏与基于接口的交互框架等核心游戏系统。
 
 ---
 
@@ -10,6 +10,8 @@
 
 - [Overview](#overview)
 - [Tech Stack](#tech-stack)
+- [Demo](#demo)
+- [Controls](#controls)
 - [Implemented Systems](#implemented-systems)
 - [Project Structure](#project-structure)
 - [Development History](#development-history--开发历程)
@@ -39,6 +41,30 @@ This project is a hands-on learning demo built while studying Unreal Engine 5 C+
 
 ---
 
+## Demo
+
+<!-- GIF: Primary Attack -->
+
+<!-- GIF: Blackhole Ability -->
+
+<!-- GIF: Dash Teleport -->
+
+---
+
+## Controls
+
+| Key | Action |
+|---|---|
+| W / A / S / D | Move |
+| Mouse | Look / Aim |
+| Left Mouse Button | Primary Attack (magic projectile) |
+| Q | Blackhole Ability |
+| R | Dash / Teleport |
+| E | Interact with world |
+| Space | Jump |
+
+---
+
 ## Implemented Systems
 
 ### 1. Third-Person Character (`ASCharacter`)
@@ -48,23 +74,58 @@ This project is a hands-on learning demo built while studying Unreal Engine 5 C+
 - `bOrientRotationToMovement = true` with `bUseControllerRotationYaw = false` — the character mesh faces the movement direction, not the camera
 - Jump support via `ACharacter::Jump` / `StopJumping`
 - Attack driven by `UAnimMontage` + `FTimerHandle`: the montage plays first, then the projectile spawns at the correct animation frame (0.2 s delay) from the `Muzzle_01` skeletal socket
+- All three abilities share the same aim direction system: line trace from camera to crosshair, projectile rotated toward the impact point
 - Delegates attack and interaction to dedicated components, keeping `ASCharacter` thin
 
-### 2. Magic Projectile (`AAMagicProjectile` + `BP_MagicProjectile`)
+### 2. Primary Attack — Magic Projectile (`AAMagicProjectile` + `BP_MagicProjectile`)
+
+**Aim correction:** Line trace from camera origin along controller rotation (up to 2000 cm). Projectile rotation set via `FRotationMatrix::MakeFromX(ImpactPoint - HandLocation)` so the projectile always flies toward the crosshair target even when the muzzle socket is offset from the camera.
 
 **C++ layer:**
 - `USphereComponent` with `"Projectile"` collision profile as the root
 - `UProjectileMovementComponent`: initial speed 1000 cm/s, zero gravity, velocity-aligned rotation
 - `UParticleSystemComponent` for in-flight VFX
 - Dual hit response:
-  - **Blocking hit** (`NotifyHit`): applies 20 point damage to the hit actor — handles physics-simulated actors such as the explosive barrel, which use Block collision
-  - **Overlap hit** (`OnActorOverlap`): applies 20 point damage via `UGameplayStatics::ApplyPointDamage`, then destroys self — for actors configured to Overlap with the projectile channel
+  - **Blocking hit** (`NotifyHit`): applies 20 point damage to the hit actor — handles physics-simulated actors such as the explosive barrel
+  - **Overlap hit** (`OnActorOverlap`): applies 20 point damage via `UGameplayStatics::ApplyPointDamage`, then destroys self
 
 **Blueprint layer (`BP_MagicProjectile`):**
 - `On Component Hit` event: spawns impact particle effect and destroys the projectile on any blocking collision
 - Instigator ignored via `Ignore Actor when Moving` on `BeginPlay` to prevent self-collision
 
-### 3. Explosive Barrel (`AExplosiveBarrel` + `BP_ExplosiveBarrel`)
+### 3. Blackhole Ability (`BP_BlackholeProjectile`)
+
+Pure Blueprint projectile. Fired from `Muzzle_01` toward the camera crosshair (same aim system as primary attack, bound to **Q**).
+
+- `URadialForceComponent` set to **attraction** mode continuously pulls nearby physics-simulated actors toward the center while active
+- `On Component Begin Overlap`: any actor with physics simulation enabled (`IsSimulatingPhysics`) is destroyed on contact
+- Self-destructs after **5 seconds** via a Blueprint `Delay` node, cleaning up the radial force field
+
+### 4. Dash / Teleport (`ASDashProjectile` + `BP_DashProjectile`)
+
+C++ class `ASDashProjectile` extends `AAMagicProjectile`. Bound to **R**.
+
+**On spawn:**
+- Starts a 2-second detonation timer (`TimerHandle_Detonate`) as a fallback if the projectile never hits anything
+
+**On hit (`NotifyHit`) or timer expiry → `Explode()`:**
+1. Guards against double-execution with `bExploded` flag
+2. Clears the detonation timer
+3. Stops projectile movement immediately (`MovementComp->StopMovementImmediately()`)
+4. Spawns impact particle effect (`ImpactEffect`) at the projectile's location
+5. Deactivates the in-flight trail (`EffectComp->DeactivateSystem()`)
+6. Starts a short `TeleportDelay` (0.2 s) timer before moving the player
+
+**`TeleportInstigator()`:**
+- Spawns `TeleportExitEffect` at the instigator's current location (exit flash)
+- Calls `InstigatorActor->TeleportTo(GetActorLocation() + FVector(0, 0, 50), ...)` — lifts player 50 cm above the impact point to avoid floor clipping
+- Destroys the projectile actor
+
+### 5. Crosshair UI Widget (UMG)
+
+A `UUserWidget` Blueprint (`Content/UI/`) added to the player's HUD via the `BP_GameMode`. Displays a static crosshair at screen center to provide aim reference for all three projectile abilities.
+
+### 6. Explosive Barrel (`AExplosiveBarrel` + `BP_ExplosiveBarrel`)
 
 **C++ layer:**
 - `UStaticMeshComponent` with `SetSimulatePhysics(true)` as root — fully physics-simulated rigid body
@@ -75,7 +136,7 @@ This project is a hands-on learning demo built while studying Unreal Engine 5 C+
 **Blueprint layer (`BP_ExplosiveBarrel`):**
 - Extends `Explode()` with destruction mesh swap and particle effect on detonation
 
-### 4. Gameplay Interface & Interaction System
+### 7. Gameplay Interface & Interaction System
 
 **`ISGameplayInterface` / `USGameplayInterface`**
 
@@ -88,7 +149,7 @@ Any actor can opt into the interaction system by implementing this interface —
 
 **`USInteractionComponent`**
 
-Attached to the character. On `PrimaryInteract()` (E key):
+Attached to the character. On `PrimaryInteract()` (**E** key):
 1. Performs a **sphere sweep** (radius 30 cm) from the character's eye point along the aim direction (max 1000 cm) using `SweepMultiByObjectType` against `ECC_WorldDynamic`
 2. Iterates hits; calls `ISGameplayInterface::Execute_Interact(HitActor, InstigatorPawn)` on the first actor that passes `Implements<USGameplayInterface>()`
 3. Renders debug geometry (`DrawDebugSphere`, `DrawDebugLine`) in green on hit, red on miss — visible for 2 s
@@ -102,7 +163,7 @@ Blueprint: extends with lid-open animation and particle effect on interact.
 
 Pure Blueprint actor implementing `ISGameplayInterface`. Triggered by E key via the interaction system; controls one or more target actors (treasure chests or explosive barrels) — calls `Interact` or `Explode()` on targets through Blueprint event graph.
 
-### 5. Input Bindings
+### 8. Input Bindings
 
 Legacy axis/action input configured in `DefaultInput.ini`:
 
@@ -112,7 +173,9 @@ Legacy axis/action input configured in `DefaultInput.ini`:
 | A / D | `MoveRight` axis | Strafe |
 | Mouse X | `Turn` axis | Camera yaw |
 | Mouse Y | `LookUp` axis | Camera pitch |
-| Left Mouse Button | `PrimaryAttack` action | Fire projectile |
+| Left Mouse Button | `PrimaryAttack` action | Fire magic projectile |
+| Q | `BlackholeAttack` action | Fire blackhole projectile |
+| R | `DashAttack` action | Fire dash/teleport projectile |
 | Space | `Jump` action | Jump |
 | E | `PrimaryInteract` action | Interact with world |
 
@@ -123,11 +186,12 @@ Legacy axis/action input configured in `DefaultInput.ini`:
 ```
 Source/ActRouguelikeDemo/
 ├── Public/
-│   ├── SCharacter.h            # Player character
+│   ├── SCharacter.h            # Player character (3 abilities, interaction)
 │   ├── SInteractionComponent.h # Sphere-sweep interaction component
 │   ├── SGameplayInterface.h    # UE5 interface for interactable actors
 │   ├── SItemChest.h            # Interactable treasure chest
-│   ├── AMagicProjectile.h      # Player-fired magic projectile
+│   ├── AMagicProjectile.h      # Base magic projectile
+│   ├── SDashProjectile.h       # Dash/teleport projectile (C++)
 │   └── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
 └── Private/
     ├── SCharacter.cpp
@@ -135,7 +199,18 @@ Source/ActRouguelikeDemo/
     ├── SGameplayInterface.cpp
     ├── SItemChest.cpp
     ├── AMagicProjectile.cpp
+    ├── SDashProjectile.cpp
     └── ExplosiveBarrel.cpp
+
+Content/Blueprint/
+├── BP_MagicProjectile.uasset       # Primary projectile (VFX, hit response)
+├── BP_BlackholeProjectile.uasset   # Blackhole ability (RadialForce, auto-destroy)
+├── BP_DashProjectile.uasset        # Dash ability (teleport effect config)
+├── BP_Player.uasset                # Player Blueprint (ability class refs)
+└── BP_GameMode.uasset              # Game mode (HUD widget setup)
+
+Content/UI/
+└── WBP_Crosshair.uasset            # Crosshair HUD widget (UMG)
 ```
 
 ---
@@ -169,9 +244,9 @@ cd ActionRoguelikeGameDemo_UE5
 
 ## Roadmap
 
+- [x] Crosshair HUD via `UMG` / `UUserWidget`
 - [ ] Enemy AI with `UAIPerceptionComponent` and Behavior Trees
 - [ ] Attribute system (health, mana) via `UAttributeComponent`
-- [ ] UI HUD using `UMG` / `UUserWidget`
 - [ ] Additional interactables and pick-up items
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication

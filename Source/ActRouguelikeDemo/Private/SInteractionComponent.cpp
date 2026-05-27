@@ -44,8 +44,18 @@ void USInteractionComponent::PrimaryInteract()
 	
 	FVector EyeLocation;
 	FRotator EyeRotation;
-	MyOwner->GetActorEyesViewPoint(EyeLocation, EyeRotation);
-	FVector End = EyeLocation + (EyeRotation.Vector()) * 1000;
+	APawn* MyPawn = Cast<APawn>(MyOwner);
+	if (MyPawn && MyPawn->GetController())
+	{
+		MyPawn->GetController()->GetPlayerViewPoint(EyeLocation, EyeRotation);
+	}
+	else
+	{
+		// fallback
+		MyOwner->GetActorEyesViewPoint(EyeLocation, EyeRotation);
+	}
+    
+	FVector End = EyeLocation + EyeRotation.Vector() * 1000;
 	
 	// FHitResult Hit;
 	// bool bBlockingHit = GetWorld()->LineTraceSingleByObjectType(Hit, EyeLocation, End, ObjectQueryParams);
@@ -65,7 +75,6 @@ void USInteractionComponent::PrimaryInteract()
 		{
 			if (HitActor->Implements<USGameplayInterface>())
 			{
-				APawn* MyPawn = Cast<APawn>(MyOwner);
 				ISGameplayInterface::Execute_Interact(HitActor, MyPawn);
 				break;
 			}
