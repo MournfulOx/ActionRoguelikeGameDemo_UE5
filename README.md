@@ -117,11 +117,27 @@ C++ class `ASDashProjectile` extends `AAMagicProjectile`. Bound to **R**.
 - Calls `InstigatorActor->TeleportTo(GetActorLocation() + FVector(0, 0, 50), ...)` — lifts player 50 cm above the impact point to avoid floor clipping
 - Destroys the projectile actor
 
-### 5. Crosshair UI Widget (UMG)
+### 5. Attribute System (`USAttributeComponent`)
+
+Component-based RPG-style attribute system. Attach to any Actor to give it health — character, enemy, or explosive barrel all share the same logic.
+
+- `Health` / `HealthMax` stored as `protected` floats, exposed to Blueprint as read-only; only modifiable through `ApplyHealthChange`
+- `ApplyHealthChange(InstigatorActor, Delta)` — single entry point for all damage/healing; returns `bool` for future invincibility/dead checks
+- `DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnHealthChanged, ...)` — broadcasts `InstigatorActor`, `OwningComp`, `NewHealth`, `Delta` on every change; `BlueprintAssignable` so any system can subscribe without polling
+
+### 6. Player Health UI (`WBP_PlayerHealth`)
+
+Event-driven UMG health bar. Binds to `USAttributeComponent::OnHealthChanged` in `Construct` — updates progress bar and text only when health actually changes, not every frame.
+
+- `Construct` (UMG BeginPlay) → casts owning pawn → gets `USAttributeComponent` → assigns delegate
+- Progress bar value = `NewHealth / HealthMax` (0–1 range)
+- UI dependency is one-directional: UI listens to gameplay; gameplay never references UI
+
+### 7. Crosshair UI Widget (UMG)
 
 A `UUserWidget` Blueprint (`Content/UI/`) added to the player's HUD via the `BP_GameMode`. Displays a static crosshair at screen center to provide aim reference for all three projectile abilities.
 
-### 6. Explosive Barrel (`AExplosiveBarrel` + `BP_ExplosiveBarrel`)
+### 8. Explosive Barrel (`AExplosiveBarrel` + `BP_ExplosiveBarrel`)
 
 **C++ layer:**
 - `UStaticMeshComponent` with `SetSimulatePhysics(true)` as root — fully physics-simulated rigid body
@@ -132,7 +148,7 @@ A `UUserWidget` Blueprint (`Content/UI/`) added to the player's HUD via the `BP_
 **Blueprint layer (`BP_ExplosiveBarrel`):**
 - Extends `Explode()` with destruction mesh swap and particle effect on detonation
 
-### 7. Gameplay Interface & Interaction System
+### 9. Gameplay Interface & Interaction System
 
 **`ISGameplayInterface` / `USGameplayInterface`**
 
@@ -159,7 +175,7 @@ Blueprint: extends with lid-open animation and particle effect on interact.
 
 Pure Blueprint actor implementing `ISGameplayInterface`. Triggered by E key via the interaction system; controls one or more target actors (treasure chests or explosive barrels) — calls `Interact` or `Explode()` on targets through Blueprint event graph.
 
-### 8. Input Bindings
+### 10. Input Bindings
 
 Legacy axis/action input configured in `DefaultInput.ini`:
 
@@ -188,7 +204,8 @@ Source/ActRouguelikeDemo/
 │   ├── SItemChest.h            # Interactable treasure chest
 │   ├── AMagicProjectile.h      # Base magic projectile
 │   ├── SDashProjectile.h       # Dash/teleport projectile (C++)
-│   └── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
+│   ├── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
+│   └── SAttributeComponent.h  # RPG attribute component (health, delegate)
 └── Private/
     ├── SCharacter.cpp
     ├── SInteractionComponent.cpp
@@ -196,17 +213,20 @@ Source/ActRouguelikeDemo/
     ├── SItemChest.cpp
     ├── AMagicProjectile.cpp
     ├── SDashProjectile.cpp
-    └── ExplosiveBarrel.cpp
+    ├── ExplosiveBarrel.cpp
+    └── SAttributeComponent.cpp
 
 Content/Blueprint/
 ├── BP_MagicProjectile.uasset       # Primary projectile (VFX, hit response)
 ├── BP_BlackholeProjectile.uasset   # Blackhole ability (RadialForce, auto-destroy)
 ├── BP_DashProjectile.uasset        # Dash ability (teleport effect config)
-├── BP_Player.uasset                # Player Blueprint (ability class refs)
+├── BP_Player.uasset                # Player Blueprint (ability class refs, health bar)
+├── BP_TestAttack.uasset            # Static test enemy (timed attack, health system)
 └── BP_GameMode.uasset              # Game mode (HUD widget setup)
 
 Content/UI/
-└── WBP_Crosshair.uasset            # Crosshair HUD widget (UMG)
+├── WBP_Crosshair.uasset            # Crosshair HUD widget (UMG)
+└── WBP_PlayerHealth.uasset         # Health bar widget (event-driven, progress bar)
 ```
 
 ---
@@ -241,8 +261,9 @@ cd ActionRoguelikeGameDemo_UE5
 ## Roadmap
 
 - [x] Crosshair HUD via `UMG` / `UUserWidget`
+- [x] Attribute system (health) via `USAttributeComponent` with multicast delegate
+- [x] Player health bar UI (`WBP_PlayerHealth`) — event-driven UMG
 - [ ] Enemy AI with `UAIPerceptionComponent` and Behavior Trees
-- [ ] Attribute system (health, mana) via `UAttributeComponent`
 - [ ] Additional interactables and pick-up items
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication

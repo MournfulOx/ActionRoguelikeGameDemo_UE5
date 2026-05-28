@@ -40,12 +40,28 @@ void AAMagicProjectile::OnActorOverlap(UPrimitiveComponent* OverlappedComponent,
 		{
 			AttributeComp->ApplyHealthChange(GetInstigator(), -20.0f);
 		}
-		else
-		{
-			UE_LOG(LogTemp, Log, TEXT("No AttributeComp on %s"), *OtherActor->GetName());
-		}
 
 		UGameplayStatics::SpawnEmitterAtLocation(this, ImpactEffect, GetActorLocation());
 		Destroy();
+	}
+}
+
+void AAMagicProjectile::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp,
+	bool bSelfMoved, FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit)
+{
+	if (!bDestroyOnBlockingHit) return;
+
+	// Block 碰撞（如炸桶 PhysicsBody），Overlap 已处理角色，不重复处理
+	if (Other && Other != GetInstigator())
+	{
+		USAttributeComponent* AttributeComp = Cast<USAttributeComponent>(
+			Other->GetComponentByClass(USAttributeComponent::StaticClass()));
+		if (!AttributeComp)
+		{
+			AController* InstigatorController = GetInstigator() ? GetInstigator()->GetInstigatorController() : nullptr;
+			UGameplayStatics::ApplyDamage(Other, 20.0f, InstigatorController, this, nullptr);
+			UGameplayStatics::SpawnEmitterAtLocation(this, ImpactEffect, GetActorLocation());
+			Destroy();
+		}
 	}
 }

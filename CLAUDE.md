@@ -72,7 +72,7 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` (not in PATH — call with full path or `& "C:\Program Files\GitHub CLI\gh.exe"`)
 - Git LFS is active for `.uasset` / `.umap` files
 
-## Current feature set (as of v0.2)
+## Current feature set (as of v0.3)
 
 - Third-person character with spring-arm camera, WASD move, mouse look, jump
 - Primary attack: magic projectile, camera line-trace aim correction
@@ -82,10 +82,12 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - Explosive barrel: physics-simulated, `URadialForceComponent`, `TakeDamage` → `Explode()`
 - Interaction system (E): sphere sweep, `ISGameplayInterface` / `USGameplayInterface`
 - Interactables: treasure chest (`ASItemChest`), lever (`BP_Lever`)
+- Attribute system: `USAttributeComponent` with `Health`/`HealthMax`, `OnHealthChanged` 4-param multicast delegate
+- Player health bar UI: `WBP_PlayerHealth`, event-driven (binds to `OnHealthChanged` in Construct)
+- Test enemy: `BP_TestAttack`, timed attack toward player, SAttributeComponent, health delegate
 
 ## Roadmap (next up)
 
 - Enemy AI with `UAIPerceptionComponent` + Behavior Trees
-- Attribute system (health, mana) via `UAttributeComponent`
 - Additional interactables and pick-ups
 - Enhanced Input System migration

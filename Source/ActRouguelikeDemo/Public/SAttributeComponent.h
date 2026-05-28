@@ -6,8 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "SAttributeComponent.generated.h"
 
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHealthChanged, AActor*, InstigatorActor, float, NewHealth, float, Delta);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnHealthChanged, AActor*, InstigatorActor,USAttributeComponent*, OwningComp,float, NewHealth, float, Delta);
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class ACTROUGUELIKEDEMO_API USAttributeComponent : public UActorComponent
@@ -20,13 +19,12 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FOnHealthChanged OnHealthChanged;
 
+	UFUNCTION(BlueprintCallable, Category = "Attributes")
+	bool ApplyHealthChange(AActor* InstigatorActor, float Delta);
+
 protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attributes")
 	float Health;
-
-public:
-	UFUNCTION(BlueprintCallable, Category = "Attributes")
-	bool ApplyHealthChange(AActor* InstigatorActor, float Delta);
 
 };
