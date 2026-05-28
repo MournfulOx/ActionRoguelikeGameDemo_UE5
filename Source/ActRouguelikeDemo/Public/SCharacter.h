@@ -11,6 +11,7 @@ class UCameraComponent;
 class USpringArmComponent;
 class UInputComponent;
 class UAnimMontage;
+class USAttributeComponent;
 
 
 UCLASS()
@@ -51,6 +52,9 @@ protected:
 	FTimerHandle TimerHandle_PrimaryAttack;
 	FTimerHandle TimerHandle_BlackholeAttack;
 	FTimerHandle TimerHandle_DashAttack;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	USAttributeComponent* AttributeComp;
 	
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
