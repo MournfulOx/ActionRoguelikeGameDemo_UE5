@@ -4,6 +4,8 @@
 
 > 使用 C++ 与 Unreal Engine 5 从零构建的第三人称动作游戏 Demo，展示了角色运动、弹道战斗、特殊能力、物理破坏与基于接口的交互框架等核心游戏系统。
 
+GIF demos for each ability are attached to the corresponding [GitHub Release](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/releases).
+
 ---
 
 ## Table of Contents / 目录
@@ -43,7 +45,7 @@ This project is a hands-on learning demo built while studying Unreal Engine 5 C+
 
 ## Demo
 
-GIF demos for each ability are attached to the corresponding [GitHub Release](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/releases).
+See [Releases](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/releases) for full GIF demos of each ability.
 
 ---
 
