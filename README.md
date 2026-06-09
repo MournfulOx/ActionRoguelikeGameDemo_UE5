@@ -177,7 +177,31 @@ Blueprint: extends with lid-open animation and particle effect on interact.
 
 Pure Blueprint actor implementing `ISGameplayInterface`. Triggered by E key via the interaction system; controls one or more target actors (treasure chests or explosive barrels) — calls `Interact` or `Explode()` on targets through Blueprint event graph.
 
-### 10. Input Bindings
+### 10. Dynamic Materials (`M_HitFlashDemo`, `ASTargetDummy`)
+
+C++ driven material parameters for gameplay feedback — no Blueprint required.
+
+**Hit Flash (`M_HitFlashDemo` / `MI_HitFlashDemo`):**
+- Material has a `TimeToHit` scalar parameter. A sine-wave expression computes flash intensity from `(WorldTime - TimeToHit)`, producing a sharp white emissive burst that fades over ~0.8 s
+- `ASTargetDummy::OnHealthChanged` calls `MeshComp->SetScalarParameterValueOnMaterials("TimeToHit", GetWorld()->TimeSeconds)` on any damage hit — the material reads the timestamp every frame and self-fades with no per-frame C++ tick
+
+**Target Dummy (`ASTargetDummy` + `BP_TargetDummy`):**
+- `UStaticMeshComponent` root + `USAttributeComponent` (100 HP)
+- Binds `OnHealthChanged` in `BeginPlay`; flashes white on any damage via `TimeToHit` parameter
+- Stateless hit feedback: no `UMaterialInstanceDynamic` allocation needed at runtime — `SetScalarParameterValueOnMaterials` updates all material instances on the mesh at once
+
+**Material Function (`MF_HitFlashDemo`):**
+- Encapsulates the hit flash node graph as a reusable chunk — drop into any material to add hit flash without duplicating the sine-wave logic
+
+**UI Material (`M_HealthBar`):**
+- Material Domain set to **User Interface**; used as a replacement health bar in UMG — demonstrates that UMG widgets can accept full material expressions rather than just static textures
+
+**Additional material assets (learning / future use):**
+- `M_PBRDemo` / `MI_PBRDemo_Inst` — PBR basics (base color, metallic, roughness)
+- `M_DissoveEffect` — noise-texture dissolve, scalar-parameter driven
+- `M_SineWave` — sine-wave utility material
+
+### 11. Input Bindings
 
 Legacy axis/action input configured in `DefaultInput.ini`:
 
@@ -229,6 +253,16 @@ Content/Blueprint/
 Content/UI/
 ├── WBP_Crosshair.uasset            # Crosshair HUD widget (UMG)
 └── WBP_PlayerHealth.uasset         # Health bar widget (event-driven, progress bar)
+
+Content/Material/
+├── M_HitFlashDemo.uasset           # Hit flash — TimeToHit scalar param, sine-wave fade
+├── MI_HitFlashDemo.uasset          # Material instance applied to target dummy mesh
+├── MF_HitFlashDemo.uasset          # Reusable Material Function encapsulating hit flash logic
+├── M_HealthBar.uasset              # UI material for health bar (Material Domain: User Interface)
+├── M_DissoveEffect.uasset          # Dissolve — noise texture + scalar param
+├── M_PBRDemo.uasset                # PBR basics reference material
+├── MI_PBRDemo_Inst.uasset          # PBR material instance
+└── M_SineWave.uasset               # Sine-wave utility material
 ```
 
 ---
@@ -265,6 +299,8 @@ cd ActionRoguelikeGameDemo_UE5
 - [x] Crosshair HUD via `UMG` / `UUserWidget`
 - [x] Attribute system (health) via `USAttributeComponent` with multicast delegate
 - [x] Player health bar UI (`WBP_PlayerHealth`) — event-driven UMG
+- [x] Dynamic materials — hit flash via `SetScalarParameterValueOnMaterials`, dissolve material, PBR basics
+- [x] Target dummy (`ASTargetDummy`) — C++ mesh actor with hit flash feedback
 - [ ] Enemy AI with `UAIPerceptionComponent` and Behavior Trees
 - [ ] Additional interactables and pick-up items
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)

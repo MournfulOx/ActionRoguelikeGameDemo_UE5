@@ -84,7 +84,14 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - Interactables: treasure chest (`ASItemChest`), lever (`BP_Lever`)
 - Attribute system: `USAttributeComponent` with `Health`/`HealthMax`, `OnHealthChanged` 4-param multicast delegate
 - Player health bar UI: `WBP_PlayerHealth`, event-driven (binds to `OnHealthChanged` in Construct)
-- Test enemy: `BP_TestAttack`, timed attack toward player, SAttributeComponent, health delegate
+- Test enemy: `BP_TestAttack`, timed attack toward player, SAttributeComponent, health delegate, `bAttackEnabled` toggle
+- Dynamic materials (Lecture 8):
+  - `M_HitFlashDemo` with `TimeToHit` scalar parameter, sine-wave self-fading emissive flash
+  - `ASTargetDummy`: static mesh + AttributeComponent, drives hit flash via `SetScalarParameterValueOnMaterials("TimeToHit", ...)` in `OnHealthChanged`
+  - `MF_HitFlashDemo`: reusable Material Function encapsulating hit flash node graph
+  - `M_HealthBar`: UI material (Material Domain: User Interface) for UMG health bar
+  - `M_DissoveEffect`: noise-texture dissolve material (asset ready, not yet wired to gameplay)
+  - `M_PBRDemo`, `M_SineWave`: learning/utility materials
 
 ## Roadmap (next up)
 
