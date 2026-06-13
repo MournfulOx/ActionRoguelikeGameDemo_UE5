@@ -7,6 +7,7 @@
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "SInteractionComponent.h"
 #include "SAttributeComponent.h"
 
@@ -33,6 +34,14 @@ ASCharacter::ASCharacter()
 	
 
 }
+
+void ASCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	
+	AttributeComp->OnHealthChanged.AddDynamic(this, &ASCharacter::OnHealthChanged);
+}
+
 
 // Called when the game starts or when spawned
 void ASCharacter::BeginPlay()
@@ -104,30 +113,7 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 
 void ASCharacter::PrimaryAttack_TimeElapsed()
 {
-	if (ensureAlways(ProjectileClass))
-	{
-		FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
-		FVector TraceStart = CameraComp->GetComponentLocation();
-		FVector TraceEnd = TraceStart + GetControlRotation().Vector() * 2000.0f;
-		
-		FCollisionObjectQueryParams ObjectQueryParams;
-		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
-		
-		FHitResult Hit;
-		bool bHit = GetWorld()->LineTraceSingleByObjectType(Hit, TraceStart, TraceEnd, ObjectQueryParams);
-		
-		FVector ImpactPoint = bHit ? Hit.ImpactPoint : TraceEnd;
-		FRotator ProjectileRotation = FRotationMatrix::MakeFromX(ImpactPoint - HandLocation).Rotator();
-		FTransform SpawnTM = FTransform(ProjectileRotation, HandLocation);
-
-
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		SpawnParams.Instigator = this;
-
-		GetWorld()->SpawnActor<AActor>(ProjectileClass, SpawnTM, SpawnParams);
-	}
+	SpawnProjectile(ProjectileClass);
 }
 
 void ASCharacter::BlackholeAttack()
@@ -138,30 +124,7 @@ void ASCharacter::BlackholeAttack()
 
 void ASCharacter::BlackholeAttack_TimeElapsed()
 {
-	UE_LOG(LogTemp, Warning, TEXT("BlackholeAttack_TimeElapsed called"));
-	if (ensureAlways(BlackholeProjectileClass))
-	{
-		FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
-		FVector TraceStart = CameraComp->GetComponentLocation();
-		FVector TraceEnd = TraceStart + GetControlRotation().Vector() * 2000.0f;
-
-		FCollisionObjectQueryParams ObjectQueryParams;
-		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
-
-		FHitResult Hit;
-		bool bHit = GetWorld()->LineTraceSingleByObjectType(Hit, TraceStart, TraceEnd, ObjectQueryParams);
-
-		FVector ImpactPoint = bHit ? Hit.ImpactPoint : TraceEnd;
-		FRotator ProjectileRotation = FRotationMatrix::MakeFromX(ImpactPoint - HandLocation).Rotator();
-		FTransform SpawnTM = FTransform(ProjectileRotation, HandLocation);
-
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		SpawnParams.Instigator = this;
-
-		GetWorld()->SpawnActor<AActor>(BlackholeProjectileClass, SpawnTM, SpawnParams);
-	}
+	SpawnProjectile(BlackholeProjectileClass);
 }
 
 void ASCharacter::DashAttack()
@@ -172,30 +135,57 @@ void ASCharacter::DashAttack()
 
 void ASCharacter::DashAttack_TimeElapsed()
 {
-	if (ensureAlways(DashProjectileClass))
+	SpawnProjectile(DashProjectileClass);
+}
+
+void ASCharacter::SpawnProjectile(TSubclassOf<AActor> ClassToSpawn)
+{
+	if (!ensureAlways(ClassToSpawn)) return;
+
+	FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
+	FVector TraceStart = CameraComp->GetComponentLocation();
+	FVector TraceEnd = TraceStart + GetControlRotation().Vector() * 5000.0f;
+
+	FCollisionObjectQueryParams ObjectQueryParams;
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_Pawn);
+
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+
+	FCollisionShape Shape = FCollisionShape::MakeSphere(20.0f);
+	FHitResult Hit;
+	bool bHit = GetWorld()->SweepSingleByObjectType(Hit, TraceStart, TraceEnd, FQuat::Identity, ObjectQueryParams, Shape, QueryParams);
+
+	FVector ImpactPoint = bHit ? Hit.ImpactPoint : TraceEnd;
+	FRotator ProjectileRotation = FRotationMatrix::MakeFromX(ImpactPoint - HandLocation).Rotator();
+	FTransform SpawnTM = FTransform(ProjectileRotation, HandLocation);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.Instigator = this;
+
+	GetWorld()->SpawnActor<AActor>(ClassToSpawn, SpawnTM, SpawnParams);
+
+	UGameplayStatics::SpawnEmitterAttached(CastingEffect, GetMesh(), "Muzzle_01");
+}
+
+void ASCharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComp, float NewHealth,
+	float Delta)
+{
+	if (Delta < 0.0f)
 	{
-		FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
-		FVector TraceStart = CameraComp->GetComponentLocation();
-		FVector TraceEnd = TraceStart + GetControlRotation().Vector() * 2000.0f;
+		GetMesh()->SetScalarParameterValueOnMaterials("TimeToHit", GetWorld()->GetTimeSeconds());
+	}
 
-		FCollisionObjectQueryParams ObjectQueryParams;
-		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
-
-		FHitResult Hit;
-		bool bHit = GetWorld()->LineTraceSingleByObjectType(Hit, TraceStart, TraceEnd, ObjectQueryParams);
-
-		FVector ImpactPoint = bHit ? Hit.ImpactPoint : TraceEnd;
-		FRotator ProjectileRotation = FRotationMatrix::MakeFromX(ImpactPoint - HandLocation).Rotator();
-		FTransform SpawnTM = FTransform(ProjectileRotation, HandLocation);
-
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		SpawnParams.Instigator = this;
-
-		GetWorld()->SpawnActor<AActor>(DashProjectileClass, SpawnTM, SpawnParams);
+	if (NewHealth <= 0.0f && Delta < 0.0f)
+	{
+		APlayerController* PC = Cast<APlayerController>(GetController());
+		DisableInput(PC);
 	}
 }
+
 
 void ASCharacter::PrimaryInteract()
 {

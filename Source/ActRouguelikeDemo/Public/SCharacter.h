@@ -49,6 +49,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Attack")
 	UAnimMontage* AttackAnim;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Attack")
+	UParticleSystem* CastingEffect;
+
 	FTimerHandle TimerHandle_PrimaryAttack;
 	FTimerHandle TimerHandle_BlackholeAttack;
 	FTimerHandle TimerHandle_DashAttack;
@@ -72,6 +75,13 @@ public:
 	void DashAttack_TimeElapsed();
 	void PrimaryInteract();
 	void PrimaryAttack_TimeElapsed();
+
+	void SpawnProjectile(TSubclassOf<AActor> ClassToSpawn);
+	
+	UFUNCTION()
+	void OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComp, float NewHealth, float Delta);
+	
+	virtual void PostInitializeComponents() override;
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;

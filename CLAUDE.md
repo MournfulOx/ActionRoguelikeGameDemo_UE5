@@ -72,29 +72,29 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` (not in PATH — call with full path or `& "C:\Program Files\GitHub CLI\gh.exe"`)
 - Git LFS is active for `.uasset` / `.umap` files
 
-## Current feature set (as of v0.3)
+## Current feature set (as of v0.4)
 
 - Third-person character with spring-arm camera, WASD move, mouse look, jump
-- Primary attack: magic projectile, camera line-trace aim correction
+- Primary attack: magic projectile, camera line-trace aim correction (self-ignore fix)
 - Blackhole ability (Q): Blueprint, RadialForce attraction, destroys simulating actors on overlap, 5s auto-destroy
 - Dash/Teleport (R): C++ `ASDashProjectile`, teleports player to impact location with particle effects
 - Crosshair HUD widget (UMG, `WBP_Crosshair`)
 - Explosive barrel: physics-simulated, `URadialForceComponent`, `TakeDamage` → `Explode()`
 - Interaction system (E): sphere sweep, `ISGameplayInterface` / `USGameplayInterface`
 - Interactables: treasure chest (`ASItemChest`), lever (`BP_Lever`)
-- Attribute system: `USAttributeComponent` with `Health`/`HealthMax`, `OnHealthChanged` 4-param multicast delegate
-- Player health bar UI: `WBP_PlayerHealth`, event-driven (binds to `OnHealthChanged` in Construct)
-- Test enemy: `BP_TestAttack`, timed attack toward player, SAttributeComponent, health delegate, `bAttackEnabled` toggle
-- Dynamic materials (Lecture 8):
-  - `M_HitFlashDemo` with `TimeToHit` scalar parameter, sine-wave self-fading emissive flash
-  - `ASTargetDummy`: static mesh + AttributeComponent, drives hit flash via `SetScalarParameterValueOnMaterials("TimeToHit", ...)` in `OnHealthChanged`
-  - `MF_HitFlashDemo`: reusable Material Function encapsulating hit flash node graph
-  - `M_HealthBar`: UI material (Material Domain: User Interface) for UMG health bar
-  - `M_DissoveEffect`: noise-texture dissolve material (asset ready, not yet wired to gameplay)
-  - `M_PBRDemo`, `M_SineWave`: learning/utility materials
+- Attribute system: `USAttributeComponent` with `Health`/`HealthMax`, clamp, dead-guard, `OnHealthChanged` 4-param multicast delegate, `IsFullHealth()`
+- Player health bar UI: `WBP_PlayerHealth`, event-driven, `HealthMax`-aware init on Construct
+- Damage popup widget: `WBP_DamagePopup`, Expose on Spawn `DamageAmount`, world-space follow + random screen offset, UMG scale+fade animation
+- Test enemy: `BP_TestAttack`, timed attack, hit flash, damage popup, stops attacking on death
+- Hit flash: `MF_HitFlashDemo` applied to player (`M_CharacterSimple`), target dummy, and test enemy via `SetScalarParameterValueOnMaterials("TimeToHit", ...)`
+- Projectile audio: `UAudioComponent` (looping flight), `ImpactSound` (`PlaySoundAtLocation`) on `SProjectileBase`
+- Casting particle: `SpawnEmitterAttached` at `Muzzle_01` on projectile spawn
+- Camera shake: `PlayWorldCameraShake` on `Explode_Implementation` in `SProjectileBase`
+- Health potion powerup: `ASPowerupActor` base (interact interface, 10s respawn timer) + `ASHealthPotion` child (heals pawn, ignores full health), `BP_HealthPotion` with `SM_PotionBottle`
+- Dynamic materials: `M_HitFlashDemo`, `MF_HitFlashDemo`, `M_HealthBar`, `M_DissoveEffect` (ready, not yet wired), `M_PBRDemo`, `M_SineWave`
 
 ## Roadmap (next up)
 
 - Enemy AI with `UAIPerceptionComponent` + Behavior Trees
-- Additional interactables and pick-ups
 - Enhanced Input System migration
+- Additional interactables and pick-ups

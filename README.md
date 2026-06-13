@@ -124,22 +124,63 @@ C++ class `ASDashProjectile` extends `AAMagicProjectile`. Bound to **R**.
 Component-based RPG-style attribute system. Attach to any Actor to give it health — character, enemy, or explosive barrel all share the same logic.
 
 - `Health` / `HealthMax` stored as `protected` floats, exposed to Blueprint as read-only; only modifiable through `ApplyHealthChange`
-- `ApplyHealthChange(InstigatorActor, Delta)` — single entry point for all damage/healing; returns `bool` for future invincibility/dead checks
+- `ApplyHealthChange(InstigatorActor, Delta)` — clamps health between `0` and `HealthMax` via `FMath::Clamp`; dead-protection guard (`!isAlive() && Delta < 0`) prevents damage/effects after death
+- `IsFullHealth()` — exposed to Blueprint for powerup/UI logic
 - `DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnHealthChanged, ...)` — broadcasts `InstigatorActor`, `OwningComp`, `NewHealth`, `Delta` on every change; `BlueprintAssignable` so any system can subscribe without polling
 
 ### 6. Player Health UI (`WBP_PlayerHealth`)
 
 Event-driven UMG health bar. Binds to `USAttributeComponent::OnHealthChanged` in `Construct` — updates progress bar and text only when health actually changes, not every frame.
 
-- `Construct` (UMG BeginPlay) → casts owning pawn → gets `USAttributeComponent` → assigns delegate
-- Progress bar value = `NewHealth / HealthMax` (0–1 range)
+- `Construct` (UMG BeginPlay) → casts owning pawn → gets `USAttributeComponent` → assigns delegate; also immediately sets bar to `Health / HealthMax` to handle non-100% starting health
+- Progress bar value = `NewHealth / HealthMax` (reads runtime `HealthMax`, not class defaults)
 - UI dependency is one-directional: UI listens to gameplay; gameplay never references UI
 
-### 7. Crosshair UI Widget (UMG)
+### 7. Damage Popup Widget (`WBP_DamagePopup`)
+
+World-space floating damage numbers that follow the hit target and fade out.
+
+- `Expose on Spawn` float `DamageAmount` — caller passes `Abs(Delta)` when creating the widget; displayed via `Set Text` on `Construct`
+- `Event Tick`: projects `AttachTo` actor's world location to screen via `Project World to Screen`, divides by viewport scale for DPI correctness, adds a per-instance `ScreenOffset` (randomised at `Construct`) for Fortnite-style scatter
+- UMG animation `PopupAnim`: scale punch `(1,1) → (1.4,1.4) → (0,0)` + alpha fade over 1 s; played on `Construct`
+- Bound in `BP_Player`, `BP_TargetDummy`, and `BP_TestAttack` via `Bind Event to OnHealthChanged` + `Branch (Delta < 0)`
+
+### 8. Hit Flash — Player & Enemies
+
+Player character and all enemies flash on damage via `SetScalarParameterValueOnMaterials("TimeToHit", GetWorld()->TimeSeconds)`.
+
+- `ASCharacter::OnHealthChanged`: triggers flash only when `Delta < 0`; same call disabled when `NewHealth <= 0` (dead-protection in `ApplyHealthChange`)
+- `M_CharacterSimple` extended with `MF_HitFlashDemo` function call + `HitFlashColor` `VectorParameter` added to emissive channel — all `M_CharacterSimple_Inst` instances inherit automatically
+- `BP_TestAttack` and `BP_TargetDummy` bind the same pattern in Blueprint
+
+### 9. Projectile Audio (`ASProjectileBase`)
+
+- `UAudioComponent` attached to root — looping flight sound assigned per Blueprint; auto-activates on spawn, auto-stops on destroy
+- `USoundBase* ImpactSound` — played via `UGameplayStatics::PlaySoundAtLocation` inside `Explode_Implementation`
+
+### 10. Casting Particle & Camera Shake
+
+- **Casting effect**: `UGameplayStatics::SpawnEmitterAttached(CastingEffect, GetMesh(), "Muzzle_01")` fires at projectile spawn in `SpawnProjectile`; asset assigned in `BP_Character`
+- **Camera shake**: `UGameplayStatics::PlayWorldCameraShake` called in `ASProjectileBase::Explode_Implementation` with the impact location; `TSubclassOf<UCameraShakeBase> ImpactCameraShake` assigned in `BP_MagicProjectile`
+
+### 11. Health Potion Powerup (`ASPowerupActor` + `ASHealthPotion`)
+
+Generic pickup/respawn framework designed for future powerup types.
+
+**`ASPowerupActor` (base):**
+- `USphereComponent` root (collision profile `OverlapAllDynamic` — detectable by the interaction sphere sweep)
+- `UStaticMeshComponent` for visual mesh (asset assigned in Blueprint)
+- `Interact_Implementation` calls `BlueprintNativeEvent OnActivated(Pawn)` — child classes override
+- `HideAndCooldown()`: hides mesh, disables sphere collision, starts `CooldownDuration` (default 10 s) timer → `RestorePowerup()` re-enables both
+
+**`ASHealthPotion` (child):**
+- `OnActivated_Implementation`: gets `USAttributeComponent` from instigator; skips if `IsFullHealth()`; calls `ApplyHealthChange(+HealAmount)` then `HideAndCooldown()`
+
+### 12. Crosshair UI Widget (UMG)
 
 A `UUserWidget` Blueprint (`Content/UI/`) added to the player's HUD via the `BP_GameMode`. Displays a static crosshair at screen center to provide aim reference for all three projectile abilities.
 
-### 8. Explosive Barrel (`AExplosiveBarrel` + `BP_ExplosiveBarrel`)
+### 13. Explosive Barrel (`AExplosiveBarrel` + `BP_ExplosiveBarrel`)
 
 **C++ layer:**
 - `UStaticMeshComponent` with `SetSimulatePhysics(true)` as root — fully physics-simulated rigid body
@@ -150,7 +191,7 @@ A `UUserWidget` Blueprint (`Content/UI/`) added to the player's HUD via the `BP_
 **Blueprint layer (`BP_ExplosiveBarrel`):**
 - Extends `Explode()` with destruction mesh swap and particle effect on detonation
 
-### 9. Gameplay Interface & Interaction System
+### 14. Gameplay Interface & Interaction System
 
 **`ISGameplayInterface` / `USGameplayInterface`**
 
@@ -177,7 +218,7 @@ Blueprint: extends with lid-open animation and particle effect on interact.
 
 Pure Blueprint actor implementing `ISGameplayInterface`. Triggered by E key via the interaction system; controls one or more target actors (treasure chests or explosive barrels) — calls `Interact` or `Explode()` on targets through Blueprint event graph.
 
-### 10. Dynamic Materials (`M_HitFlashDemo`, `ASTargetDummy`)
+### 15. Dynamic Materials (`M_HitFlashDemo`, `ASTargetDummy`)
 
 C++ driven material parameters for gameplay feedback — no Blueprint required.
 
@@ -201,7 +242,7 @@ C++ driven material parameters for gameplay feedback — no Blueprint required.
 - `M_DissoveEffect` — noise-texture dissolve, scalar-parameter driven
 - `M_SineWave` — sine-wave utility material
 
-### 11. Input Bindings
+### 16. Input Bindings
 
 Legacy axis/action input configured in `DefaultInput.ini`:
 
@@ -224,35 +265,43 @@ Legacy axis/action input configured in `DefaultInput.ini`:
 ```
 Source/ActRouguelikeDemo/
 ├── Public/
-│   ├── SCharacter.h            # Player character (3 abilities, interaction)
+│   ├── SCharacter.h            # Player character (3 abilities, interaction, hit flash)
 │   ├── SInteractionComponent.h # Sphere-sweep interaction component
 │   ├── SGameplayInterface.h    # UE5 interface for interactable actors
 │   ├── SItemChest.h            # Interactable treasure chest
-│   ├── AMagicProjectile.h      # Base magic projectile
-│   ├── SDashProjectile.h       # Dash/teleport projectile (C++)
+│   ├── SProjectileBase.h       # Projectile base (movement, VFX, audio, camera shake)
+│   ├── AMagicProjectile.h      # Magic projectile (overlap damage, blocking hit)
+│   ├── SDashProjectile.h       # Dash/teleport projectile
+│   ├── SPowerupActor.h         # Powerup base (interact, respawn timer, hide/show)
+│   ├── SHealthPotion.h         # Health potion (heals pawn, ignores full health)
 │   ├── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
-│   └── SAttributeComponent.h  # RPG attribute component (health, delegate)
+│   └── SAttributeComponent.h  # RPG attribute component (Health/HealthMax, delegate, dead-guard)
 └── Private/
     ├── SCharacter.cpp
     ├── SInteractionComponent.cpp
     ├── SGameplayInterface.cpp
     ├── SItemChest.cpp
+    ├── SProjectileBase.cpp
     ├── AMagicProjectile.cpp
     ├── SDashProjectile.cpp
+    ├── SPowerupActor.cpp
+    ├── SHealthPotion.cpp
     ├── ExplosiveBarrel.cpp
     └── SAttributeComponent.cpp
 
 Content/Blueprint/
-├── BP_MagicProjectile.uasset       # Primary projectile (VFX, hit response)
+├── BP_MagicProjectile.uasset       # Primary projectile (audio, camera shake, casting FX)
 ├── BP_BlackholeProjectile.uasset   # Blackhole ability (RadialForce, auto-destroy)
 ├── BP_DashProjectile.uasset        # Dash ability (teleport effect config)
-├── BP_Player.uasset                # Player Blueprint (ability class refs, health bar)
-├── BP_TestAttack.uasset            # Static test enemy (timed attack, health system)
+├── BP_Player.uasset                # Player Blueprint (ability refs, damage popup binding)
+├── BP_HealthPotion.uasset          # Health potion pickup (SM_PotionBottle, 10s respawn)
+├── BP_TestAttack.uasset            # Test enemy (timed attack, hit flash, damage popup)
 └── BP_GameMode.uasset              # Game mode (HUD widget setup)
 
 Content/UI/
 ├── WBP_Crosshair.uasset            # Crosshair HUD widget (UMG)
-└── WBP_PlayerHealth.uasset         # Health bar widget (event-driven, progress bar)
+├── WBP_PlayerHealth.uasset         # Health bar (event-driven, HealthMax-aware init)
+└── WBP_DamagePopup.uasset          # Floating damage numbers (world-space, random offset, animation)
 
 Content/Material/
 ├── M_HitFlashDemo.uasset           # Hit flash — TimeToHit scalar param, sine-wave fade
@@ -297,12 +346,14 @@ cd ActionRoguelikeGameDemo_UE5
 ## Roadmap
 
 - [x] Crosshair HUD via `UMG` / `UUserWidget`
-- [x] Attribute system (health) via `USAttributeComponent` with multicast delegate
-- [x] Player health bar UI (`WBP_PlayerHealth`) — event-driven UMG
-- [x] Dynamic materials — hit flash via `SetScalarParameterValueOnMaterials`, dissolve material, PBR basics
-- [x] Target dummy (`ASTargetDummy`) — C++ mesh actor with hit flash feedback
+- [x] Attribute system (`USAttributeComponent`) — `Health`/`HealthMax`, clamp, dead-guard, multicast delegate
+- [x] Player health bar UI (`WBP_PlayerHealth`) — event-driven UMG, `HealthMax`-aware
+- [x] Dynamic materials — hit flash (`MF_HitFlashDemo`) on player, enemies, and target dummy
+- [x] Damage popup widget (`WBP_DamagePopup`) — world-space follow, random scatter, UMG animation
+- [x] Projectile audio — looped flight sound (`UAudioComponent`) + impact sound (`PlaySoundAtLocation`)
+- [x] Casting particle effect (`SpawnEmitterAttached`) + world camera shake on impact
+- [x] Health potion powerup (`ASPowerupActor` / `ASHealthPotion`) — interact to heal, 10 s respawn
 - [ ] Enemy AI with `UAIPerceptionComponent` and Behavior Trees
-- [ ] Additional interactables and pick-up items
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication
 
