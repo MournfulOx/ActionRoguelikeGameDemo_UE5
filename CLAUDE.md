@@ -72,7 +72,7 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` (not in PATH — call with full path or `& "C:\Program Files\GitHub CLI\gh.exe"`)
 - Git LFS is active for `.uasset` / `.umap` files
 
-## Current feature set (as of v0.4)
+## Current feature set (as of v0.3)
 
 - Third-person character with spring-arm camera, WASD move, mouse look, jump
 - Primary attack: magic projectile, camera line-trace aim correction (self-ignore fix)
