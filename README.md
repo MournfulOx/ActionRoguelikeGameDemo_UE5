@@ -242,6 +242,42 @@ C++ driven material parameters for gameplay feedback — no Blueprint required.
 - `M_DissoveEffect` — noise-texture dissolve, scalar-parameter driven
 - `M_SineWave` — sine-wave utility material
 
+### 17. Enemy AI — Behavior Tree (`ASAICharacter` + `ASAIController` + `USBTService_ChackAttackRange`)
+
+C++ AI system built on UE5's Behavior Tree / Blackboard framework. A ranged minion enemy chases the player and stops when within attack range.
+
+**AI Controller (`ASAIController`):**
+- `BeginPlay` calls `RunBehaviorTree(BehaviorTree)` to start the tree; `BehaviorTree` asset reference is `EditDefaultsOnly` so it's assigned per Blueprint subclass (`BP_MinionController`)
+- Immediately writes player's location and actor reference into the Blackboard: `SetValueAsVector("MoveToLocation", ...)` and `SetValueAsObject("TargetActor", ...)`
+
+**Blackboard (`BB_MinionRanged`):**
+- `SelfActor` (Object, auto-populated) — the AI pawn itself
+- `MoveToLocation` (Vector) — cached player position
+- `TargetActor` (Object, base class Actor) — player actor reference, tracked continuously by Move To task
+- `WithinAttackRange` (Bool) — written every tick by the service
+
+**Behavior Tree (`BT_MinionRanged`):**
+```
+ROOT
+└── Selector  [Service: CheckAttackRange — ticks every ~0.5 s]
+    ├── Sequence  [Decorator: "Outside Attack Range?" — Blackboard WithinAttackRange Is Not Set → abort Self]
+    │   └── Move To Player  (tracks TargetActor actor reference, Acceptable Radius 5 cm)
+    └── Wait 5 s   (fires when within attack range — placeholder for attack logic)
+```
+- **Selector** tries left child first; falls through to Wait only when the Decorator on the Sequence fails (i.e., `WithinAttackRange` is true)
+- **Observer Aborts: Self** on the Decorator means Move To is immediately cancelled the moment the service sets `WithinAttackRange = true`, letting the Selector reach Wait without waiting for Move To to finish
+
+**BT Service (`USBTService_ChackAttackRange`):**
+- Overrides `TickNode` (called every ~0.5 s, configurable)
+- Gets `TargetActor` from Blackboard via `GetValueAsObject` → cast to `AActor`
+- Gets AI pawn via `OwnerComp.GetAIOwner()->GetPawn()`
+- Computes `FVector::Distance`; if `< 500 cm` also runs `AIController::LineOfSightTo` for cover awareness
+- Writes `bWithinRange && bHasLOS` to the Blackboard key bound via `FBlackboardKeySelector AttackRangeKey` (editable in the BT editor dropdown, not hardcoded)
+
+**Build.cs additions:** `AIModule`, `GameplayTasks` (required for `UBTService` linkage).
+
+**Level setup:** `NavMeshBoundsVolume` placed and scaled to cover the play area — provides pathfinding data used by the Move To task.
+
 ### 16. Input Bindings
 
 Legacy axis/action input configured in `DefaultInput.ini`:
@@ -275,7 +311,11 @@ Source/ActRouguelikeDemo/
 │   ├── SPowerupActor.h         # Powerup base (interact, respawn timer, hide/show)
 │   ├── SHealthPotion.h         # Health potion (heals pawn, ignores full health)
 │   ├── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
-│   └── SAttributeComponent.h  # RPG attribute component (Health/HealthMax, delegate, dead-guard)
+│   ├── SAttributeComponent.h  # RPG attribute component (Health/HealthMax, delegate, dead-guard)
+│   └── AI/
+│       ├── SAICharacter.h      # AI character base class
+│       ├── SAIController.h     # Runs BehaviorTree on BeginPlay, seeds Blackboard
+│       └── SBTService_ChackAttackRange.h  # BT Service: distance + LOS check → WithinAttackRange
 └── Private/
     ├── SCharacter.cpp
     ├── SInteractionComponent.cpp
@@ -287,7 +327,17 @@ Source/ActRouguelikeDemo/
     ├── SPowerupActor.cpp
     ├── SHealthPotion.cpp
     ├── ExplosiveBarrel.cpp
-    └── SAttributeComponent.cpp
+    ├── SAttributeComponent.cpp
+    └── AI/
+        ├── SAICharacter.cpp
+        ├── SAIController.cpp
+        └── SBTService_ChackAttackRange.cpp
+
+Content/AI/
+├── BP_MinionRanged.uasset          # Ranged AI minion Blueprint (mesh, AnimBP, AI controller ref)
+├── BP_MinionController.uasset      # AI Controller Blueprint (assigns BT_MinionRanged asset)
+├── BT_MinionRanged.uasset          # Behavior Tree: Selector → Move To Player / Wait
+└── BB_MinionRanged.uasset          # Blackboard: SelfActor, MoveToLocation, TargetActor, WithinAttackRange
 
 Content/Blueprint/
 ├── BP_MagicProjectile.uasset       # Primary projectile (audio, camera shake, casting FX)
@@ -353,7 +403,8 @@ cd ActionRoguelikeGameDemo_UE5
 - [x] Projectile audio — looped flight sound (`UAudioComponent`) + impact sound (`PlaySoundAtLocation`)
 - [x] Casting particle effect (`SpawnEmitterAttached`) + world camera shake on impact
 - [x] Health potion powerup (`ASPowerupActor` / `ASHealthPotion`) — interact to heal, 10 s respawn
-- [ ] Enemy AI with `UAIPerceptionComponent` and Behavior Trees
+- [x] Enemy AI — Behavior Tree + Blackboard + BT Service (`ASAICharacter`, `ASAIController`, `USBTService_ChackAttackRange`) — ranged minion chases player, stops within attack range, line-of-sight check
+- [ ] Enemy attack logic (fire projectile at player when within range)
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication
 

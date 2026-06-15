@@ -1,12 +1,11 @@
-// SDashProjectile.h
 #pragma once
 
 #include "CoreMinimal.h"
-#include "AMagicProjectile.h"
+#include "SProjectileBase.h"
 #include "SDashProjectile.generated.h"
 
 UCLASS()
-class ACTROUGUELIKEDEMO_API ASDashProjectile : public AAMagicProjectile
+class ACTROUGUELIKEDEMO_API ASDashProjectile : public ASProjectileBase
 {
 	GENERATED_BODY()
 
@@ -14,10 +13,9 @@ public:
 	ASDashProjectile();
 
 protected:
-
 	UPROPERTY(EditDefaultsOnly, Category = "Dash")
 	float TeleportDelay = 0.2f;
-    
+
 	UPROPERTY(EditDefaultsOnly, Category = "Dash")
 	UParticleSystem* TeleportExitEffect;
 
@@ -37,6 +35,7 @@ protected:
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex,
 		bool bFromSweep, const FHitResult& SweepResult);
 
-	void Explode();
+	virtual void Explode_Implementation() override;
+
 	void TeleportInstigator();
 };

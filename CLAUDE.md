@@ -72,7 +72,7 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` (not in PATH — call with full path or `& "C:\Program Files\GitHub CLI\gh.exe"`)
 - Git LFS is active for `.uasset` / `.umap` files
 
-## Current feature set (as of v0.3)
+## Current feature set (as of v0.4)
 
 - Third-person character with spring-arm camera, WASD move, mouse look, jump
 - Primary attack: magic projectile, camera line-trace aim correction (self-ignore fix)
@@ -92,9 +92,10 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - Camera shake: `PlayWorldCameraShake` on `Explode_Implementation` in `SProjectileBase`
 - Health potion powerup: `ASPowerupActor` base (interact interface, 10s respawn timer) + `ASHealthPotion` child (heals pawn, ignores full health), `BP_HealthPotion` with `SM_PotionBottle`
 - Dynamic materials: `M_HitFlashDemo`, `MF_HitFlashDemo`, `M_HealthBar`, `M_DissoveEffect` (ready, not yet wired), `M_PBRDemo`, `M_SineWave`
+- Enemy AI: `ASAICharacter` + `ASAIController` (runs BT on BeginPlay, seeds Blackboard) + `USBTService_ChackAttackRange` (distance + line-of-sight check every ~0.5s → `WithinAttackRange` bool); Behavior Tree Selector: chase player (Sequence + Outside Attack Range? Decorator) or Wait 5s when in range; NavMeshBoundsVolume in level; `AIModule` + `GameplayTasks` added to Build.cs
 
 ## Roadmap (next up)
 
-- Enemy AI with `UAIPerceptionComponent` + Behavior Trees
+- Enemy attack logic (fire projectile at player when `WithinAttackRange` is true)
 - Enhanced Input System migration
 - Additional interactables and pick-ups
