@@ -25,7 +25,7 @@ void USBTService_ChackAttackRange::TickNode(UBehaviorTreeComponent& OwnerComp, u
 				{
 					float DistanceTo = FVector::Distance(TargetActor->GetActorLocation(), AIPawn->GetActorLocation());
 					
-					bool bWithinRange = DistanceTo < 500.0f;
+					bool bWithinRange = DistanceTo < 1250.0f;
 					
 					bool bHasLOS = false;
 					if (bWithinRange)

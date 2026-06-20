@@ -92,10 +92,17 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - Camera shake: `PlayWorldCameraShake` on `Explode_Implementation` in `SProjectileBase`
 - Health potion powerup: `ASPowerupActor` base (interact interface, 10s respawn timer) + `ASHealthPotion` child (heals pawn, ignores full health), `BP_HealthPotion` with `SM_PotionBottle`
 - Dynamic materials: `M_HitFlashDemo`, `MF_HitFlashDemo`, `M_HealthBar`, `M_DissoveEffect` (ready, not yet wired), `M_PBRDemo`, `M_SineWave`
-- Enemy AI: `ASAICharacter` + `ASAIController` (runs BT on BeginPlay, seeds Blackboard) + `USBTService_ChackAttackRange` (distance + line-of-sight check every ~0.5s → `WithinAttackRange` bool); Behavior Tree Selector: chase player (Sequence + Outside Attack Range? Decorator) or Wait 5s when in range; NavMeshBoundsVolume in level; `AIModule` + `GameplayTasks` added to Build.cs
+- Enemy AI core: `ASAICharacter` + `ASAIController` + Behavior Tree / Blackboard; `NavMeshBoundsVolume` in level; `AIModule` + `GameplayTasks` added to Build.cs
+- AI targeting via sight: `ASAICharacter` has `UPawnSensingComponent`; `OnSeePawn` → `OnPawnSeen` writes `TargetActor` to Blackboard + `DrawDebugString("PLAYER SPOTTED")`; controller no longer auto-targets on BeginPlay (commented out) — enemy must *see* the player first. (Note: `UPawnSensingComponent` is deprecated in favor of AI Perception — warning only, still compiles)
+- BT Service `USBTService_ChackAttackRange`: distance + `LineOfSightTo` check every ~0.5s → `WithinAttackRange` bool
+- Custom C++ BT Task `USBTTask_RangedAttack`: spawns `ProjectileClass` (`TSubclassOf`, EditAnywhere) from `Muzzle_01` socket toward `TargetActor`, `AlwaysSpawn` collision handling; runs when within attack range
+- EQS (Environment Query System, enabled in Editor Preferences): `Query_FindNearbyLocation` (Donut generator + Distance test ≥500 prefer-lesser + Trace/LOS test) + custom `QueryContext_TargetActor`; BT runs the query → writes `MoveToLocation` → Move To, so the enemy repositions to a smart spot *near* the player instead of charging straight in
+- `ASAIController::BeginPlay` guards `RunBehaviorTree` with `ensureMsgf` (C++ assert demo)
 
 ## Roadmap (next up)
 
-- Enemy attack logic (fire projectile at player when `WithinAttackRange` is true)
+- Give the AI an `USAttributeComponent` so it can take damage / die (currently it only attacks)
+- Migrate `UPawnSensingComponent` → AI Perception (deprecation warning)
+- Improve bot animations (rotation rate, foot sliding) — partially covered in Lecture 11
 - Enhanced Input System migration
 - Additional interactables and pick-ups

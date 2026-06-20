@@ -242,41 +242,61 @@ C++ driven material parameters for gameplay feedback — no Blueprint required.
 - `M_DissoveEffect` — noise-texture dissolve, scalar-parameter driven
 - `M_SineWave` — sine-wave utility material
 
-### 17. Enemy AI — Behavior Tree (`ASAICharacter` + `ASAIController` + `USBTService_ChackAttackRange`)
+### 17. Enemy AI — Behavior Tree, EQS & Pawn Sensing (`ASAICharacter` + `ASAIController` + custom BT Task / Service)
 
-C++ AI system built on UE5's Behavior Tree / Blackboard framework. A ranged minion enemy chases the player and stops when within attack range.
+C++ AI system built on UE5's Behavior Tree / Blackboard framework. A ranged minion enemy *spots* the player by sight, repositions to a smart firing spot near the player using an Environment Query, and fires projectiles when within attack range and line of sight.
 
 **AI Controller (`ASAIController`):**
-- `BeginPlay` calls `RunBehaviorTree(BehaviorTree)` to start the tree; `BehaviorTree` asset reference is `EditDefaultsOnly` so it's assigned per Blueprint subclass (`BP_MinionController`)
-- Immediately writes player's location and actor reference into the Blackboard: `SetValueAsVector("MoveToLocation", ...)` and `SetValueAsObject("TargetActor", ...)`
+- `BeginPlay` calls `RunBehaviorTree(BehaviorTree)`, guarded by `ensureMsgf` so a missing tree assignment surfaces a clear assert instead of a silent failure (`BehaviorTree` is `EditDefaultsOnly`, assigned per Blueprint subclass `BP_MinionController`)
+- No longer auto-targets the player on `BeginPlay` — targeting is now driven by sight (Pawn Sensing) so the enemy stays idle until it actually sees the player
+
+**Sight — Pawn Sensing (`ASAICharacter`):**
+- `UPawnSensingComponent` added in the constructor; binds `OnSeePawn` → `OnPawnSeen(APawn*)`
+- `OnPawnSeen` writes the spotted pawn into the Blackboard `TargetActor` key and draws a `"PLAYER SPOTTED"` debug string above the bot
+- *Note:* `UPawnSensingComponent` is deprecated in UE5 in favor of the AI Perception system (compiles with a warning) — migration is on the roadmap
 
 **Blackboard (`BB_MinionRanged`):**
 - `SelfActor` (Object, auto-populated) — the AI pawn itself
-- `MoveToLocation` (Vector) — cached player position
-- `TargetActor` (Object, base class Actor) — player actor reference, tracked continuously by Move To task
+- `MoveToLocation` (Vector) — destination produced by the EQS query
+- `TargetActor` (Object, base class Actor) — player actor reference, set by Pawn Sensing
 - `WithinAttackRange` (Bool) — written every tick by the service
 
 **Behavior Tree (`BT_MinionRanged`):**
 ```
 ROOT
-└── Selector  [Service: CheckAttackRange — ticks every ~0.5 s]
-    ├── Sequence  [Decorator: "Outside Attack Range?" — Blackboard WithinAttackRange Is Not Set → abort Self]
-    │   └── Move To Player  (tracks TargetActor actor reference, Acceptable Radius 5 cm)
-    └── Wait 5 s   (fires when within attack range — placeholder for attack logic)
+└── Selector  [Service: CheckAttackRange (~0.5 s) + Set Default Focus to TargetActor]
+    ├── [Decorator: "Within Attack Range?" — WithinAttackRange Is Set]
+    │   └── Selector → Cooldown → Loop → Attack Sequence (Wait · RangedAttack)
+    ├── Move To Sequence
+    │   ├── Find Nearby Location  (Run EQS Query → writes MoveToLocation)
+    │   └── Move To Player        (Move To MoveToLocation)
+    └── Wait 2 s
 ```
-- **Selector** tries left child first; falls through to Wait only when the Decorator on the Sequence fails (i.e., `WithinAttackRange` is true)
-- **Observer Aborts: Self** on the Decorator means Move To is immediately cancelled the moment the service sets `WithinAttackRange = true`, letting the Selector reach Wait without waiting for Move To to finish
+- **Set Default Focus** keeps the bot facing `TargetActor` so projectiles fire in the right direction
+- When in range, the **Cooldown + Loop** fires a short burst of ranged attacks, then re-evaluates
+
+**Custom C++ BT Task — Ranged Attack (`USBTTask_RangedAttack`):**
+- Overrides `ExecuteTask`; resolves the AI's pawn via `OwnerComp.GetAIOwner()->GetPawn()`
+- Reads the `Muzzle_01` skeletal socket location and the `TargetActor` from the Blackboard
+- Aims by direction vector `TargetActor location − MuzzleLocation`, converted to a `FRotator` via `.Rotation()`
+- Spawns `ProjectileClass` (`TSubclassOf<AActor>`, `EditAnywhere` — chosen per BT node) with `ESpawnActorCollisionHandlingMethod::AlwaysSpawn` so the projectile spawns even when the muzzle overlaps the bot; returns `Succeeded` / `Failed` accordingly
+
+**Environment Query System (EQS) — smarter movement:**
+- Enabled via *Editor Preferences → Experimental → EQS*
+- Custom context `QueryContext_TargetActor` returns the Blackboard `TargetActor` so tests can measure against the player
+- `Query_FindNearbyLocation`:
+  - **Donut** generator centered on the player — rings of candidate points around the target
+  - **Distance** test: at least 500 cm, prefer lesser — keeps the bot at a firing distance, not on top of the player
+  - **Trace** test (Visibility, require *not* hit) — discards points with no line of sight to the player
+- The BT runs the query, writes the best point to `MoveToLocation`, and `Move To` walks there — giving more natural repositioning than charging straight at the player
 
 **BT Service (`USBTService_ChackAttackRange`):**
-- Overrides `TickNode` (called every ~0.5 s, configurable)
-- Gets `TargetActor` from Blackboard via `GetValueAsObject` → cast to `AActor`
-- Gets AI pawn via `OwnerComp.GetAIOwner()->GetPawn()`
-- Computes `FVector::Distance`; if `< 500 cm` also runs `AIController::LineOfSightTo` for cover awareness
-- Writes `bWithinRange && bHasLOS` to the Blackboard key bound via `FBlackboardKeySelector AttackRangeKey` (editable in the BT editor dropdown, not hardcoded)
+- Overrides `TickNode` (~0.5 s); reads `TargetActor`, computes `FVector::Distance` to the AI pawn
+- If `< 500 cm`, also runs `AIController::LineOfSightTo`; writes `bWithinRange && bHasLOS` to the Blackboard key bound via `FBlackboardKeySelector AttackRangeKey` (editable in the BT editor, not hardcoded)
 
-**Build.cs additions:** `AIModule`, `GameplayTasks` (required for `UBTService` linkage).
+**Build.cs additions:** `AIModule`, `GameplayTasks` (required for `UBTService` / `UBTTaskNode` linkage).
 
-**Level setup:** `NavMeshBoundsVolume` placed and scaled to cover the play area — provides pathfinding data used by the Move To task.
+**Level setup:** `NavMeshBoundsVolume` placed and scaled to cover the play area — provides pathfinding data used by Move To and EQS.
 
 ### 16. Input Bindings
 
@@ -313,9 +333,10 @@ Source/ActRouguelikeDemo/
 │   ├── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
 │   ├── SAttributeComponent.h  # RPG attribute component (Health/HealthMax, delegate, dead-guard)
 │   └── AI/
-│       ├── SAICharacter.h      # AI character base class
-│       ├── SAIController.h     # Runs BehaviorTree on BeginPlay, seeds Blackboard
-│       └── SBTService_ChackAttackRange.h  # BT Service: distance + LOS check → WithinAttackRange
+│       ├── SAICharacter.h      # AI character + PawnSensing (sight → TargetActor)
+│       ├── SAIController.h     # Runs BehaviorTree on BeginPlay (ensureMsgf guard)
+│       ├── SBTService_ChackAttackRange.h  # BT Service: distance + LOS check → WithinAttackRange
+│       └── SBTTask_RangedAttack.h         # BT Task: spawn projectile at target from Muzzle_01
 └── Private/
     ├── SCharacter.cpp
     ├── SInteractionComponent.cpp
@@ -331,13 +352,16 @@ Source/ActRouguelikeDemo/
     └── AI/
         ├── SAICharacter.cpp
         ├── SAIController.cpp
-        └── SBTService_ChackAttackRange.cpp
+        ├── SBTService_ChackAttackRange.cpp
+        └── SBTTask_RangedAttack.cpp
 
 Content/AI/
 ├── BP_MinionRanged.uasset          # Ranged AI minion Blueprint (mesh, AnimBP, AI controller ref)
 ├── BP_MinionController.uasset      # AI Controller Blueprint (assigns BT_MinionRanged asset)
-├── BT_MinionRanged.uasset          # Behavior Tree: Selector → Move To Player / Wait
-└── BB_MinionRanged.uasset          # Blackboard: SelfActor, MoveToLocation, TargetActor, WithinAttackRange
+├── BT_MinionRanged.uasset          # Behavior Tree: sight → EQS reposition → ranged attack
+├── BB_MinionRanged.uasset          # Blackboard: SelfActor, MoveToLocation, TargetActor, WithinAttackRange
+├── Query_FindNearbyLocation.uasset # EQS: Donut + Distance + Trace → smart firing spot near player
+└── QueryContext_TargetActor.uasset # EQS context returning the Blackboard TargetActor
 
 Content/Blueprint/
 ├── BP_MagicProjectile.uasset       # Primary projectile (audio, camera shake, casting FX)
@@ -403,8 +427,12 @@ cd ActionRoguelikeGameDemo_UE5
 - [x] Projectile audio — looped flight sound (`UAudioComponent`) + impact sound (`PlaySoundAtLocation`)
 - [x] Casting particle effect (`SpawnEmitterAttached`) + world camera shake on impact
 - [x] Health potion powerup (`ASPowerupActor` / `ASHealthPotion`) — interact to heal, 10 s respawn
-- [x] Enemy AI — Behavior Tree + Blackboard + BT Service (`ASAICharacter`, `ASAIController`, `USBTService_ChackAttackRange`) — ranged minion chases player, stops within attack range, line-of-sight check
-- [ ] Enemy attack logic (fire projectile at player when within range)
+- [x] Enemy AI — Behavior Tree + Blackboard + BT Service (`ASAICharacter`, `ASAIController`, `USBTService_ChackAttackRange`) — ranged minion, line-of-sight check
+- [x] Enemy attack logic — custom C++ BT Task (`USBTTask_RangedAttack`) fires a projectile at the player when within range
+- [x] Smarter movement — EQS query (`Query_FindNearbyLocation`) repositions the bot to a firing spot near the player
+- [x] Sight-based targeting — `UPawnSensingComponent` (`OnSeePawn`) so the enemy must see the player before engaging
+- [ ] AI takes damage / dies (`USAttributeComponent` on the bot)
+- [ ] Migrate Pawn Sensing → AI Perception (deprecation warning)
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication
 
