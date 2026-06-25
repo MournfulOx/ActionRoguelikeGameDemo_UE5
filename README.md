@@ -518,7 +518,7 @@ This project is part of an ongoing effort to build a solid C++ foundation in Unr
 
 **Author / 作者:** Jacky Feng  
 **Engine:** Unreal Engine 5.6  
-**Started:** 2025
+**Started:** 2026
 
 ---
 
