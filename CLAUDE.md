@@ -72,7 +72,7 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` (not in PATH — call with full path or `& "C:\Program Files\GitHub CLI\gh.exe"`)
 - Git LFS is active for `.uasset` / `.umap` files
 
-## Current feature set (as of v0.3)
+## Current feature set (as of v0.4)
 
 - Third-person character with spring-arm camera, WASD move, mouse look, jump
 - Primary attack: magic projectile, camera line-trace aim correction (self-ignore fix)
@@ -82,7 +82,7 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - Explosive barrel: physics-simulated, `URadialForceComponent`, `TakeDamage` → `Explode()`
 - Interaction system (E): sphere sweep, `ISGameplayInterface` / `USGameplayInterface`
 - Interactables: treasure chest (`ASItemChest`), lever (`BP_Lever`)
-- Attribute system: `USAttributeComponent` with `Health`/`HealthMax`, clamp, dead-guard, `OnHealthChanged` 4-param multicast delegate, `IsFullHealth()`
+- Attribute system: `USAttributeComponent` with `Health`/`HealthMax`, clamp, dead-guard, `OnHealthChanged` 4-param multicast delegate, `IsFullHealth()`, `GetHealth()`, `GetHealthMax()`
 - Player health bar UI: `WBP_PlayerHealth`, event-driven, `HealthMax`-aware init on Construct
 - Damage popup widget: `WBP_DamagePopup`, Expose on Spawn `DamageAmount`, world-space follow + random screen offset, UMG scale+fade animation
 - Test enemy: `BP_TestAttack`, timed attack, hit flash, damage popup, stops attacking on death
@@ -91,18 +91,21 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - Casting particle: `SpawnEmitterAttached` at `Muzzle_01` on projectile spawn
 - Camera shake: `PlayWorldCameraShake` on `Explode_Implementation` in `SProjectileBase`
 - Health potion powerup: `ASPowerupActor` base (interact interface, 10s respawn timer) + `ASHealthPotion` child (heals pawn, ignores full health), `BP_HealthPotion` with `SM_PotionBottle`
-- Dynamic materials: `M_HitFlashDemo`, `MF_HitFlashDemo`, `M_HealthBar`, `M_DissoveEffect` (ready, not yet wired), `M_PBRDemo`, `M_SineWave`
+- Dynamic materials: `M_HitFlashDemo`, `MF_HitFlashDemo`, `M_HealthBar`, `M_DissoveEffect` (wired via `UMaterialInstanceDynamic`, `DissolveAmount` 1.0→-1.0), `M_PBRDemo`, `M_SineWave`
 - Enemy AI core: `ASAICharacter` + `ASAIController` + Behavior Tree / Blackboard; `NavMeshBoundsVolume` in level; `AIModule` + `GameplayTasks` added to Build.cs
-- AI targeting via sight: `ASAICharacter` has `UPawnSensingComponent`; `OnSeePawn` → `OnPawnSeen` writes `TargetActor` to Blackboard + `DrawDebugString("PLAYER SPOTTED")`; controller no longer auto-targets on BeginPlay (commented out) — enemy must *see* the player first. (Note: `UPawnSensingComponent` is deprecated in favor of AI Perception — warning only, still compiles)
-- BT Service `USBTService_ChackAttackRange`: distance + `LineOfSightTo` check every ~0.5s → `WithinAttackRange` bool
-- Custom C++ BT Task `USBTTask_RangedAttack`: spawns `ProjectileClass` (`TSubclassOf`, EditAnywhere) from `Muzzle_01` socket toward `TargetActor`, `AlwaysSpawn` collision handling; runs when within attack range
-- EQS (Environment Query System, enabled in Editor Preferences): `Query_FindNearbyLocation` (Donut generator + Distance test ≥500 prefer-lesser + Trace/LOS test) + custom `QueryContext_TargetActor`; BT runs the query → writes `MoveToLocation` → Move To, so the enemy repositions to a smart spot *near* the player instead of charging straight in
-- `ASAIController::BeginPlay` guards `RunBehaviorTree` with `ensureMsgf` (C++ assert demo)
+- AI targeting via sight: `UPawnSensingComponent`; `OnSeePawn` → writes `TargetActor` to Blackboard (Note: deprecated in favor of AI Perception — warning only)
+- BT Service `USBTService_ChackAttackRange`: distance + `LineOfSightTo` → `WithinAttackRange` bool
+- Custom C++ BT Task `USBTTask_RangedAttack`: spawns projectile from `Muzzle_01` toward `TargetActor`; `Params.Instigator = MyPawn` prevents friendly fire
+- EQS `Query_FindNearbyLocation`: Donut + Distance + Trace → smart repositioning near player; `QueryContext_TargetActor` for player reference
+- `ASAIController::BeginPlay` guarded with `ensureMsgf` (C++ assert demo)
+- **GameMode AI spawning** (`ASGameModeBase`): repeating timer → EQS query (`Query_FindBotSpawn`) → bot count check via `TActorIterator` → `SpawnActor`; `UCurveFloat` scales max bot count over time
+- **AI death**: `USAttributeComponent` on `ASAICharacter`; on death → `StopLogic`, ragdoll, capsule disabled, dissolve via `UMaterialInstanceDynamic` (`M_DissoveEffect`), `SetLifeSpan`
+- **AI friendly fire fix**: `OtherActor->IsA(GetInstigator()->GetClass())` check in `AMagicProjectile::OnActorOverlap`
+- **Bot animation polish**: `Use Desired Rotation = true` on `BP_MinionRanged`; `Jog_Combat_BS` target weight interpolation = 8
+- **AI flee/heal (Assignment 4)**: `USBTService_CheckHealth` writes `LowHealth` bool; `Query_FindHidingSpot` EQS (Donut + Trace hidden from player + Distance); `USBTTask_HealSelf` restores full health; Cooldown decorator (60s) on flee Sequence
 
 ## Roadmap (next up)
 
-- Give the AI an `USAttributeComponent` so it can take damage / die (currently it only attacks)
 - Migrate `UPawnSensingComponent` → AI Perception (deprecation warning)
-- Improve bot animations (rotation rate, foot sliding) — partially covered in Lecture 11
 - Enhanced Input System migration
 - Additional interactables and pick-ups

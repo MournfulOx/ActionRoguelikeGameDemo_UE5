@@ -7,6 +7,7 @@
 #include "SAICharacter.generated.h"
 
 class UPawnSensingComponent;
+class USAttributeComponent;
 
 UCLASS()
 class ACTROUGUELIKEDEMO_API ASAICharacter : public ACharacter
@@ -14,16 +15,35 @@ class ACTROUGUELIKEDEMO_API ASAICharacter : public ACharacter
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this character's properties
 	ASAICharacter();
 
 protected:
-	
+
 	virtual void PostInitializeComponents() override;
-	
-	UPROPERTY(VisibleAnywhere, Category= "Components")
+
+	UPROPERTY(VisibleAnywhere, Category = "Components")
 	UPawnSensingComponent* PawnSensingComp;
-	
+
+	UPROPERTY(VisibleAnywhere, Category = "Components")
+	USAttributeComponent* AttributeComp;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Effects")
+	UMaterialInterface* DissolveMaterial;
+
+	UPROPERTY()
+	UMaterialInstanceDynamic* DissolveMI;
+
+	FTimerHandle TimerHandle_Dissolve;
+	float DissolveStartTime;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Effects")
+	float DissolveDuration = 3.0f;
+
+	void UpdateDissolveMaterial();
+
 	UFUNCTION()
 	void OnPawnSeen(APawn* Pawn);
+
+	UFUNCTION()
+	void OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComp, float NewHealth, float Delta);
 };

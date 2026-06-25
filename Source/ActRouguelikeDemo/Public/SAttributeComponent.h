@@ -36,4 +36,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Attributes")
 	bool IsFullHealth() const;
+
+	float GetHealth() const { return Health; }
+	float GetHealthMax() const { return HealthMax; }
 };

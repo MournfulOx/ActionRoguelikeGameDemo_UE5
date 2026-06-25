@@ -242,7 +242,18 @@ C++ driven material parameters for gameplay feedback — no Blueprint required.
 - `M_DissoveEffect` — noise-texture dissolve, scalar-parameter driven
 - `M_SineWave` — sine-wave utility material
 
-### 17. Enemy AI — Behavior Tree, EQS & Pawn Sensing (`ASAICharacter` + `ASAIController` + custom BT Task / Service)
+### 17. GameMode — Dynamic AI Spawning (`ASGameModeBase`)
+
+Spawns ranged minions at runtime via EQS so the level is never hand-populated with enemies.
+
+- `StartPlay()` (not `BeginPlay`) starts a repeating timer (`SpawnTimerInterval`, default 2 s) → `SpawnBotTimerElapsed()`
+- Each tick runs `UEnvQueryManager::RunEQSQuery` (`Query_FindBotSpawn`, `RandomBest5Pct` mode); callback `OnQueryCompleted` (`UFUNCTION()` — required for `AddDynamic`) fires when the query finishes
+- Before spawning, counts alive bots via `TActorIterator<ASAICharacter>` + `USAttributeComponent::isAlive()` (`EngineUtils.h` required for the iterator)
+- Max bot count driven by `UCurveFloat* DifficultyCurve` keyed on `GetWorld()->TimeSeconds` — difficulty scales over time; falls back to `4` if no curve is assigned
+- `FActorSpawnParameters::SpawnCollisionHandlingOverride = AdjustIfPossibleButAlwaysSpawn` ensures bots don't fail to spawn due to mild overlap at the chosen EQS point
+- `AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned` set on `ASAICharacter` — without this, dynamically spawned bots have no controller
+
+### 18. Enemy AI — Behavior Tree, EQS & Pawn Sensing (`ASAICharacter` + `ASAIController` + custom BT Task / Service)
 
 C++ AI system built on UE5's Behavior Tree / Blackboard framework. A ranged minion enemy *spots* the player by sight, repositions to a smart firing spot near the player using an Environment Query, and fires projectiles when within attack range and line of sight.
 
@@ -294,9 +305,55 @@ ROOT
 - Overrides `TickNode` (~0.5 s); reads `TargetActor`, computes `FVector::Distance` to the AI pawn
 - If `< 500 cm`, also runs `AIController::LineOfSightTo`; writes `bWithinRange && bHasLOS` to the Blackboard key bound via `FBlackboardKeySelector AttackRangeKey` (editable in the BT editor, not hardcoded)
 
+**AI Death:**
+- `USAttributeComponent` added to `ASAICharacter`; `OnHealthChanged` bound in `PostInitializeComponents`
+- On death (`NewHealth <= 0`): stops BT via `AIC->GetBrainComponent()->StopLogic("Killed")`; enables ragdoll (`SetAllBodiesSimulatePhysics(true)`, collision profile `"Ragdoll"`); disables capsule collision; sets `SetLifeSpan(DissolveDuration + 0.5f)`
+- Hit flash on damage: `GetMesh()->SetScalarParameterValueOnMaterials("TimeToHit", ...)` — only fires while alive to avoid overwriting dissolve parameters
+- **Dissolve effect**: on death, creates a `UMaterialInstanceDynamic` from `M_DissoveEffect`, applies it to all mesh slots; a 0.05 s looping timer drives `DissolveAmount` from `1.0` (visible) → `-1.0` (fully dissolved) over `DissolveDuration` seconds via `FMath::Lerp`; timer auto-clears when `Alpha >= 1.0`
+
+**Friendly Fire Prevention:**
+- `AMagicProjectile::OnActorOverlap` checks `OtherActor->IsA(GetInstigator()->GetClass())` — AI projectiles skip other AI units; player projectiles skip other player pawns
+- `SBTTask_RangedAttack` sets `Params.Instigator = MyPawn` so the spawned projectile knows who fired it
+
+**Bot Animation Polish (Blueprint):**
+- `BP_MinionRanged` CharacterMovement: `Use Controller Rotation Yaw = false`, `Use Desired Rotation = true` — smooth rotation instead of instant snap
+- `Jog_Combat_BS` blend space: `Target Weight Interpolation Per Second = 8` — fast blend eliminates foot sliding when the bot changes speed
+
 **Build.cs additions:** `AIModule`, `GameplayTasks` (required for `UBTService` / `UBTTaskNode` linkage).
 
 **Level setup:** `NavMeshBoundsVolume` placed and scaled to cover the play area — provides pathfinding data used by Move To and EQS.
+
+### 19. AI Flee / Heal Behavior — Assignment 4
+
+When health drops below 30 %, the bot breaks off combat, retreats to a hidden position, heals to full, and resumes fighting — but can only flee once every 60 seconds.
+
+**BT Service (`USBTService_CheckHealth`):**
+- `TickNode` reads `USAttributeComponent::GetHealth() / GetHealthMax()`; writes result to a `LowHealth` Bool Blackboard key
+- `LowHealthFraction` (default 0.3) is `EditAnywhere` so the threshold can be tuned per BT node
+
+**BT Task (`USBTTask_HealSelf`):**
+- Calls `AttributeComp->ApplyHealthChange(AIPawn, GetHealthMax())` — `ApplyHealthChange` clamps internally so passing `HealthMax` always fills to full without overshooting
+- Returns `Succeeded` immediately (healing is instantaneous)
+
+**EQS — `Query_FindHidingSpot`:**
+- **Donut** generator centered on the AI (`EnvQueryContext_Querier`) — candidate ring of points at 500–1500 cm
+- **Trace test** from `QueryContext_TargetActor` (player) with `Bool Match = false` — keeps only points the player cannot see (occluded positions)
+- **Distance test** (Score Only, negative factor) — prefers closer hiding spots to minimise travel time
+
+**Behavior Tree changes:**
+```
+ROOT
+└── Selector  [Service: CheckHealth · Service: CheckAttackRange · Set Default Focus]
+    ├── Sequence  [Decorator: LowHealth = true · Decorator: Cooldown 60 s]  ← flee branch (highest priority)
+    │   ├── Run EQS Query  (Query_FindHidingSpot → HideLocation)
+    │   ├── Move To        (HideLocation)
+    │   └── HealSelf
+    ├── [Decorator: Within Attack Range?] Selector → Cooldown → Loop → Attack Sequence
+    ├── Move To Sequence  (EQS find nearby location → move)
+    └── Wait
+```
+- The Cooldown decorator on the flee Sequence prevents re-entry for 60 s after healing completes
+- After healing, `LowHealth` becomes false (health is full), so the Selector falls through to the attack branch and combat resumes normally
 
 ### 16. Input Bindings
 
@@ -333,10 +390,13 @@ Source/ActRouguelikeDemo/
 │   ├── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
 │   ├── SAttributeComponent.h  # RPG attribute component (Health/HealthMax, delegate, dead-guard)
 │   └── AI/
-│       ├── SAICharacter.h      # AI character + PawnSensing (sight → TargetActor)
-│       ├── SAIController.h     # Runs BehaviorTree on BeginPlay (ensureMsgf guard)
-│       ├── SBTService_ChackAttackRange.h  # BT Service: distance + LOS check → WithinAttackRange
-│       └── SBTTask_RangedAttack.h         # BT Task: spawn projectile at target from Muzzle_01
+│       ├── SAICharacter.h               # AI character + PawnSensing + AttributeComp + dissolve death
+│       ├── SAIController.h              # Runs BehaviorTree on BeginPlay (ensureMsgf guard)
+│       ├── SBTService_ChackAttackRange.h  # BT Service: distance + LOS → WithinAttackRange
+│       ├── SBTService_CheckHealth.h     # BT Service: health fraction → LowHealth bool
+│       ├── SBTTask_RangedAttack.h       # BT Task: spawn projectile at target from Muzzle_01
+│       └── SBTTask_HealSelf.h           # BT Task: restore AI to full health
+├── SGameModeBase.h                      # GameMode: dynamic AI spawning via EQS + difficulty curve
 └── Private/
     ├── SCharacter.cpp
     ├── SInteractionComponent.cpp
@@ -349,19 +409,27 @@ Source/ActRouguelikeDemo/
     ├── SHealthPotion.cpp
     ├── ExplosiveBarrel.cpp
     ├── SAttributeComponent.cpp
+    ├── SGameModeBase.cpp
     └── AI/
         ├── SAICharacter.cpp
         ├── SAIController.cpp
         ├── SBTService_ChackAttackRange.cpp
-        └── SBTTask_RangedAttack.cpp
+        ├── SBTService_CheckHealth.cpp
+        ├── SBTTask_RangedAttack.cpp
+        └── SBTTask_HealSelf.cpp
 
 Content/AI/
-├── BP_MinionRanged.uasset          # Ranged AI minion Blueprint (mesh, AnimBP, AI controller ref)
-├── BP_MinionController.uasset      # AI Controller Blueprint (assigns BT_MinionRanged asset)
-├── BT_MinionRanged.uasset          # Behavior Tree: sight → EQS reposition → ranged attack
-├── BB_MinionRanged.uasset          # Blackboard: SelfActor, MoveToLocation, TargetActor, WithinAttackRange
-├── Query_FindNearbyLocation.uasset # EQS: Donut + Distance + Trace → smart firing spot near player
-└── QueryContext_TargetActor.uasset # EQS context returning the Blackboard TargetActor
+├── BP_MinionRanged.uasset           # Ranged AI minion (mesh, AnimBP, DissolveMaterial, rotation fix)
+├── BP_MinionController.uasset       # AI Controller Blueprint (assigns BT_MinionRanged asset)
+├── BT_MinionRanged.uasset           # Behavior Tree: flee→heal · sight · EQS reposition · ranged attack
+├── BB_MinionRanged.uasset           # Blackboard: SelfActor, MoveToLocation, TargetActor, WithinAttackRange, LowHealth, HideLocation
+├── Query_FindNearbyLocation.uasset  # EQS: Donut + Distance + Trace → smart firing spot near player
+├── Query_FindHidingSpot.uasset      # EQS: Donut + Trace (hidden from player) + Distance → flee destination
+├── Query_FindBotSpawn.uasset        # EQS: spawn location for GameMode bot spawner
+└── QueryContext_TargetActor.uasset  # EQS context returning the Blackboard TargetActor
+
+Content/Blueprint/
+├── BP_OwnGameMode.uasset            # GameMode Blueprint (MinionClass, SpawnBotQuery, DifficultyCurve)
 
 Content/Blueprint/
 ├── BP_MagicProjectile.uasset       # Primary projectile (audio, camera shake, casting FX)
@@ -431,7 +499,11 @@ cd ActionRoguelikeGameDemo_UE5
 - [x] Enemy attack logic — custom C++ BT Task (`USBTTask_RangedAttack`) fires a projectile at the player when within range
 - [x] Smarter movement — EQS query (`Query_FindNearbyLocation`) repositions the bot to a firing spot near the player
 - [x] Sight-based targeting — `UPawnSensingComponent` (`OnSeePawn`) so the enemy must see the player before engaging
-- [ ] AI takes damage / dies (`USAttributeComponent` on the bot)
+- [x] GameMode dynamic AI spawning — `ASGameModeBase` + EQS + `UCurveFloat` difficulty scaling
+- [x] AI takes damage / dies — `USAttributeComponent` on `ASAICharacter`, ragdoll + dissolve on death
+- [x] AI friendly fire prevention — `IsA(GetInstigator()->GetClass())` check in projectile overlap
+- [x] Bot animation polish — smooth rotation (`Use Desired Rotation`), blend space weight = 8
+- [x] AI flee / heal behavior — `USBTService_CheckHealth` + EQS hiding spot + `USBTTask_HealSelf` + 60 s cooldown
 - [ ] Migrate Pawn Sensing → AI Perception (deprecation warning)
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication

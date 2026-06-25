@@ -14,6 +14,12 @@ void AAMagicProjectile::OnActorOverlap(UPrimitiveComponent* OverlappedComponent,
 {
 	if (OtherActor && OtherActor != GetInstigator())
 	{
+		// 防止友伤：发射者和目标是同类型（都是 AI）则跳过
+		if (GetInstigator() && OtherActor->IsA(GetInstigator()->GetClass()))
+		{
+			return;
+		}
+
 		USAttributeComponent* AttributeComp = Cast<USAttributeComponent>(
 			OtherActor->GetComponentByClass(USAttributeComponent::StaticClass()));
 		if (AttributeComp)
