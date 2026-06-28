@@ -2,13 +2,13 @@
 
 
 #include "SGameModeBase.h"
-
 #include "EngineUtils.h"
 #include "SAttributeComponent.h"
 #include "AI/SAICharacter.h"
 #include "EnvironmentQuery/EnvQueryManager.h"
 #include "EnvironmentQuery/EnvQueryTypes.h"
 #include "EnvironmentQuery/EnvQueryInstanceBlueprintWrapper.h"
+#include "DrawDebugHelpers.h"
 
 
 ASGameModeBase::ASGameModeBase()
@@ -25,6 +25,33 @@ void ASGameModeBase::StartPlay()
 
 void ASGameModeBase::SpawnBotTimerElapsed()
 {
+	int32 NrOfAliveBots = 0;
+	for (TActorIterator<ASAICharacter> It(GetWorld()); It; ++It)
+	{
+		ASAICharacter* Bot = *It;
+
+		USAttributeComponent* AttributeComp = USAttributeComponent::GetAttributes(Bot);
+		if (ensure(AttributeComp) && AttributeComp->isAlive())
+		{
+			NrOfAliveBots++;
+		}
+	}
+	
+	UE_LOG(LogTemp, Log, TEXT("Found %i alive bots."), NrOfAliveBots);
+	
+	float MaxBotCount = 4.0f;
+	
+	if (DifficultyCurve)
+	{
+		MaxBotCount = DifficultyCurve->GetFloatValue(GetWorld()->TimeSeconds);
+	}
+	
+	if (NrOfAliveBots >= MaxBotCount)
+	{
+		UE_LOG(LogTemp, Log, TEXT("At maximum bot capacity. Skipping bot spawn."));
+		return;
+	}
+	
 	if (!ensureMsgf(SpawnBotQuery, TEXT("SpawnBotQuery is null in %s"), *GetName()))
 	{
 		return;
@@ -46,31 +73,6 @@ void ASGameModeBase::OnQueryCompleted(UEnvQueryInstanceBlueprintWrapper* QueryIn
 		return;
 	}
 	
-	int32 NrOfAliveBots = 0;
-	for (TActorIterator<ASAICharacter> It(GetWorld()); It; ++It)
-	{
-		ASAICharacter* Bot = *It;
-
-		USAttributeComponent* AttributeComp = Cast<USAttributeComponent>(Bot->GetComponentByClass(USAttributeComponent::StaticClass()));
-		if (ensure(AttributeComp) && AttributeComp->isAlive())
-		{
-			NrOfAliveBots++;
-		}
-	}
-	
-	float MaxBotCount = 4.0f;
-	
-	if (DifficultyCurve)
-	{
-		MaxBotCount = DifficultyCurve->GetFloatValue(GetWorld()->TimeSeconds);
-	}
-	
-	if (NrOfAliveBots >= MaxBotCount)
-	{
-		return;
-	}
-	
-
 	
 	TArray<FVector> Locations = QueryInstance->GetResultsAsLocations();
 	
@@ -79,5 +81,7 @@ void ASGameModeBase::OnQueryCompleted(UEnvQueryInstanceBlueprintWrapper* QueryIn
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 		GetWorld()->SpawnActor<AActor>(MinionClass, Locations[0], FRotator::ZeroRotator, SpawnParams);
+		
+		DrawDebugSphere(GetWorld(), Locations[0], 50.0f, 20 , FColor::Blue, false, 60.0f);
 	}
 }

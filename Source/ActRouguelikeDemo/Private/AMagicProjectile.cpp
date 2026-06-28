@@ -1,5 +1,6 @@
 #include "AMagicProjectile.h"
 #include "SAttributeComponent.h"
+#include "SProjectileBase.h"
 #include "Components/SphereComponent.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -14,6 +15,8 @@ void AAMagicProjectile::OnActorOverlap(UPrimitiveComponent* OverlappedComponent,
 {
 	if (OtherActor && OtherActor != GetInstigator())
 	{
+		if (OtherActor->IsA<ASProjectileBase>()) return;
+
 		// 防止友伤：发射者和目标是同类型（都是 AI）则跳过
 		if (GetInstigator() && OtherActor->IsA(GetInstigator()->GetClass()))
 		{
@@ -24,7 +27,7 @@ void AAMagicProjectile::OnActorOverlap(UPrimitiveComponent* OverlappedComponent,
 			OtherActor->GetComponentByClass(USAttributeComponent::StaticClass()));
 		if (AttributeComp)
 		{
-			AttributeComp->ApplyHealthChange(GetInstigator(), -20.0f);
+			AttributeComp->ApplyHealthChange(GetInstigator(), -DamageAmount);
 		}
 
 		Explode();
@@ -36,14 +39,14 @@ void AAMagicProjectile::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UP
 {
 	if (!bDestroyOnBlockingHit) return;
 
-	if (Other && Other != GetInstigator())
+	if (Other && Other != GetInstigator() && !Other->IsA<ASProjectileBase>())
 	{
 		USAttributeComponent* AttributeComp = Cast<USAttributeComponent>(
 			Other->GetComponentByClass(USAttributeComponent::StaticClass()));
 		if (!AttributeComp)
 		{
 			AController* InstigatorController = GetInstigator() ? GetInstigator()->GetInstigatorController() : nullptr;
-			UGameplayStatics::ApplyDamage(Other, 20.0f, InstigatorController, this, nullptr);
+			UGameplayStatics::ApplyDamage(Other, DamageAmount, InstigatorController, this, nullptr);
 			Explode();
 		}
 	}

@@ -2,22 +2,19 @@
 
 #include "CoreMinimal.h"
 #include "SProjectileBase.h"
-#include "AMagicProjectile.generated.h"
+#include "SAIProjectile.generated.h"
 
 UCLASS()
-class ACTROUGUELIKEDEMO_API AAMagicProjectile : public ASProjectileBase
+class ACTROUGUELIKEDEMO_API ASAIProjectile : public ASProjectileBase
 {
 	GENERATED_BODY()
 
 public:
-	AAMagicProjectile();
+	ASAIProjectile();
 
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Attack")
-	float DamageAmount = 20.0f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Attack")
-	bool bDestroyOnBlockingHit = true;
+	float DamageAmount = 5.0f;
 
 	UFUNCTION()
 	void OnActorOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,

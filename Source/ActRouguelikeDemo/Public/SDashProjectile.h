@@ -23,6 +23,9 @@ protected:
 
 	FTimerHandle TimerHandle_Detonate;
 	FTimerHandle TimerHandle_Teleport;
+	FTimerHandle TimerHandle_EnableCollision;
+
+	void EnableCollision();
 
 	virtual void BeginPlay() override;
 

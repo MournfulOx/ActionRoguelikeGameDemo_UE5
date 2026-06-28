@@ -12,7 +12,17 @@ ASDashProjectile::ASDashProjectile()
 void ASDashProjectile::BeginPlay()
 {
 	Super::BeginPlay();
-	GetWorldTimerManager().SetTimer(TimerHandle_Detonate, this, &ASDashProjectile::Explode_Implementation, 2.0f);
+
+	// 生成瞬间关闭碰撞，0.1s 后再开启，避免紧贴玩家时立即触发
+	SphereComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GetWorldTimerManager().SetTimer(TimerHandle_EnableCollision, this, &ASDashProjectile::EnableCollision, 0.1f);
+
+	GetWorldTimerManager().SetTimer(TimerHandle_Detonate, this, &ASDashProjectile::Explode_Implementation, 1.0f);
+}
+
+void ASDashProjectile::EnableCollision()
+{
+	SphereComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 }
 
 void ASDashProjectile::OnDashOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -29,7 +39,10 @@ void ASDashProjectile::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPr
 	bool bSelfMoved, FVector HitLocation, FVector HitNormal,
 	FVector NormalImpulse, const FHitResult& Hit)
 {
-	Explode();
+	if (Other && Other != GetInstigator())
+	{
+		Explode();
+	}
 }
 
 void ASDashProjectile::Explode_Implementation()
@@ -48,10 +61,15 @@ void ASDashProjectile::Explode_Implementation()
 void ASDashProjectile::TeleportInstigator()
 {
 	AActor* InstigatorActor = GetInstigator();
-	if (ensure(InstigatorActor))
+	if (!ensure(InstigatorActor))
 	{
-		UGameplayStatics::SpawnEmitterAtLocation(this, TeleportExitEffect, InstigatorActor->GetActorLocation());
-		InstigatorActor->TeleportTo(GetActorLocation() + FVector(0, 0, 100.0f), InstigatorActor->GetActorRotation());
+		Destroy();
+		return;
 	}
+
+	FVector TeleportTarget = GetActorLocation() + FVector(0, 0, 100.0f);
+
+	UGameplayStatics::SpawnEmitterAtLocation(this, TeleportExitEffect, InstigatorActor->GetActorLocation());
+	InstigatorActor->TeleportTo(TeleportTarget, InstigatorActor->GetActorRotation());
 	Destroy();
 }

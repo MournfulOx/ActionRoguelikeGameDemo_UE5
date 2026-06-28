@@ -79,6 +79,7 @@ void ASCharacter::MoveRight(float value)
 
 void ASCharacter::PrimaryAttack()
 {
+	if (GetWorldTimerManager().IsTimerActive(TimerHandle_PrimaryAttack)) return;
 	PlayAnimMontage(AttackAnim);
 	GetWorldTimerManager().SetTimer(TimerHandle_PrimaryAttack, this, &ASCharacter::PrimaryAttack_TimeElapsed, 0.2f);
 }
@@ -143,7 +144,7 @@ void ASCharacter::SpawnProjectile(TSubclassOf<AActor> ClassToSpawn)
 	if (!ensureAlways(ClassToSpawn)) return;
 
 	FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
-	FVector TraceStart = CameraComp->GetComponentLocation();
+	FVector TraceStart = GetPawnViewLocation();	// 固定眼部高度，不随弹簧臂旋转跑到地面以下
 	FVector TraceEnd = TraceStart + GetControlRotation().Vector() * 5000.0f;
 
 	FCollisionObjectQueryParams ObjectQueryParams;

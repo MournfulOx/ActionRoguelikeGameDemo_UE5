@@ -18,13 +18,15 @@ public:
 	ASAICharacter();
 
 protected:
+	
+	void SetTargetActor(AActor* NewTarget);
 
 	virtual void PostInitializeComponents() override;
 
 	UPROPERTY(VisibleAnywhere, Category = "Components")
 	UPawnSensingComponent* PawnSensingComp;
 
-	UPROPERTY(VisibleAnywhere, Category = "Components")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USAttributeComponent* AttributeComp;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")

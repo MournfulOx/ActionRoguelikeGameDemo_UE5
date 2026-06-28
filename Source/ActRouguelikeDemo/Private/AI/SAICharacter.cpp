@@ -29,6 +29,12 @@ void ASAICharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponen
 {
 	if (Delta < 0.0f && NewHealth > 0.0f)
 	{
+		
+		if (InstigatorActor != this)
+		{
+			SetTargetActor(InstigatorActor);
+		}
+		
 		// 受击闪光（死后不触发，避免覆盖 DissolveMI 参数）
 		GetMesh()->SetScalarParameterValueOnMaterials("TimeToHit", GetWorld()->GetTimeSeconds());
 	}
@@ -62,6 +68,7 @@ void ASAICharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponen
 		SetLifeSpan(DissolveDuration + 0.5f);
 	}
 }
+	
 
 void ASAICharacter::UpdateDissolveMaterial()
 {
@@ -76,15 +83,19 @@ void ASAICharacter::UpdateDissolveMaterial()
 		GetWorldTimerManager().ClearTimer(TimerHandle_Dissolve);
 	}
 }
+	
+void ASAICharacter::SetTargetActor(AActor* NewTarget)
+{
+		AAIController* AIC = Cast<AAIController>(GetController());
+		if (AIC)
+		{
+			AIC->GetBlackboardComponent()->SetValueAsObject("TargetActor", NewTarget);
+		}
+}	
 
 void ASAICharacter::OnPawnSeen(APawn* Pawn)
 {
-	AAIController* AIC = Cast<AAIController>(GetController());
-	if (AIC)
-	{
-		UBlackboardComponent* BBComp = AIC->GetBlackboardComponent();
-		BBComp->SetValueAsObject("TargetActor", Pawn);
-
+		SetTargetActor(Pawn);
 		DrawDebugString(GetWorld(), GetActorLocation(), "PLAYER SPOTTED", nullptr, FColor::White, 4.0f, true);
-	}
 }
+	
