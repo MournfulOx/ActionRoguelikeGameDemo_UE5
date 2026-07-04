@@ -38,6 +38,9 @@ protected:
 	
 public:
 	UFUNCTION(BlueprintCallable)
+	bool Kill(AActor* InstigatorActor);
+	
+	UFUNCTION(BlueprintCallable)
 	bool isAlive() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Attributes")

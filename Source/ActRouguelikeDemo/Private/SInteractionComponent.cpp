@@ -3,7 +3,6 @@
 
 #include "SInteractionComponent.h"
 #include "SGameplayInterface.h"
-#include "DrawDebugHelpers.h"
 
 
 // Sets default values for this component's properties
@@ -66,7 +65,6 @@ void USInteractionComponent::PrimaryInteract()
 	Shape.SetSphere(Radius);
 	
 	bool bBlockingHit = GetWorld()->SweepMultiByObjectType(Hits, EyeLocation, End, FQuat::Identity, ObjectQueryParams, Shape);
-	FColor LineColor = bBlockingHit ? FColor::Green : FColor::Red;
 	
 	for (FHitResult Hit : Hits)
 	{
@@ -79,7 +77,5 @@ void USInteractionComponent::PrimaryInteract()
 				break;
 			}
 		}
-		DrawDebugSphere(GetWorld(), Hit.ImpactPoint, Radius, 32, LineColor, false, 2.0f);
 	}
-	DrawDebugLine(GetWorld(), EyeLocation, End, LineColor, false, 2.0f, 0.0f, 2.0f);
 }

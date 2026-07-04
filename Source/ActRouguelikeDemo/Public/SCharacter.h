@@ -81,6 +81,9 @@ public:
 	UFUNCTION()
 	void OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComp, float NewHealth, float Delta);
 	
+	UFUNCTION(Exec)
+	void HealSelf(float Amount = 100);
+	
 	virtual void PostInitializeComponents() override;
 
 	// Called to bind functionality to input

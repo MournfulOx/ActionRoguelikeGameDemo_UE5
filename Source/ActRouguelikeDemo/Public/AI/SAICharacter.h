@@ -8,6 +8,8 @@
 
 class UPawnSensingComponent;
 class USAttributeComponent;
+class UUserWidget;
+class USWorldUserWidget;
 
 UCLASS()
 class ACTROUGUELIKEDEMO_API ASAICharacter : public ACharacter
@@ -18,6 +20,11 @@ public:
 	ASAICharacter();
 
 protected:
+	
+	USWorldUserWidget* ActiveHealthBar;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> HealthBarWidgetClass;
 	
 	void SetTargetActor(AActor* NewTarget);
 

@@ -72,7 +72,7 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` (not in PATH — call with full path or `& "C:\Program Files\GitHub CLI\gh.exe"`)
 - Git LFS is active for `.uasset` / `.umap` files
 
-## Current feature set (as of v0.4)
+## Current feature set (as of v0.5)
 
 - Third-person character with spring-arm camera, WASD move, mouse look, jump
 - Primary attack: magic projectile, camera line-trace aim correction (self-ignore fix)
@@ -103,6 +103,12 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - **AI friendly fire fix**: `OtherActor->IsA(GetInstigator()->GetClass())` check in `AMagicProjectile::OnActorOverlap`
 - **Bot animation polish**: `Use Desired Rotation = true` on `BP_MinionRanged`; `Jog_Combat_BS` target weight interpolation = 8
 - **AI flee/heal (Assignment 4)**: `USBTService_CheckHealth` writes `LowHealth` bool; `Query_FindHidingSpot` EQS (Donut + Trace hidden from player + Distance); `USBTTask_HealSelf` restores full health; Cooldown decorator (60s) on flee Sequence
+- **3D world-space health bar**: `USWorldUserWidget` C++ base (extends `UUserWidget`); `NativeTick` → `ProjectWorldToScreen` + `GetViewportScale` DPI correction → `SetRenderTranslation` on `ParentSizeBox`; `AttachedActor` public property; auto-`RemoveFromParent` on invalid actor; `BP_MinionHealth_Widget` Blueprint extends it
+- **Main HUD framework**: `WBP_Main_HUD` container widget added via GameMode; bundles `WBP_PlayerHealth`, `WBP_Crosshair`, `WBP_Credits`, `WBP_GameModeInfo`; `WBP_GameModeInfo` shows elapsed time via `GameState->GetServerWorldTimeSeconds()`
+- **Player spawn via GameMode + PlayerStart**: no manually placed pawn; `DefaultPawnClass = BP_Player` in `BP_OwnGameMode`; `PlayerStart` in level; Project Settings Default Game Mode set accordingly
+- **Console exec commands** (`UFUNCTION(Exec)`): `ASCharacter::HealSelf(float Amount)` heals player; `ASGameModeBase::KillAll()` kills all bots via `TActorIterator`; God mode via `CanBeDamaged` bool checked in `USAttributeComponent::ApplyHealthChange`
+- **Shooting accuracy fix**: `SpawnProjectile` traces from `CameraComp->GetComponentLocation()` (not eye height); DotProduct check — if `HandToImpact` opposes camera forward, fall back to camera forward (fixes steep upward angle shooting into ground)
+- **Debug draw cleanup**: removed all `DrawDebugSphere`/`DrawDebugLine`/`DrawDebugString` calls from `SInteractionComponent`, `SGameModeBase`, `SAICharacter`; removed `#include "DrawDebugHelpers.h"` from all three
 
 ## Roadmap (next up)
 

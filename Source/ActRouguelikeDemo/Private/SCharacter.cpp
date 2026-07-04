@@ -144,8 +144,8 @@ void ASCharacter::SpawnProjectile(TSubclassOf<AActor> ClassToSpawn)
 	if (!ensureAlways(ClassToSpawn)) return;
 
 	FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
-	FVector TraceStart = GetPawnViewLocation();	// 固定眼部高度，不随弹簧臂旋转跑到地面以下
-	FVector TraceEnd = TraceStart + GetControlRotation().Vector() * 5000.0f;
+	FVector TraceStart = CameraComp->GetComponentLocation();
+	FVector TraceEnd = TraceStart + CameraComp->GetForwardVector() * 5000.0f;
 
 	FCollisionObjectQueryParams ObjectQueryParams;
 	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
@@ -155,12 +155,15 @@ void ASCharacter::SpawnProjectile(TSubclassOf<AActor> ClassToSpawn)
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(this);
 
-	FCollisionShape Shape = FCollisionShape::MakeSphere(20.0f);
 	FHitResult Hit;
-	bool bHit = GetWorld()->SweepSingleByObjectType(Hit, TraceStart, TraceEnd, FQuat::Identity, ObjectQueryParams, Shape, QueryParams);
+	bool bHit = GetWorld()->SweepSingleByObjectType(Hit, TraceStart, TraceEnd, FQuat::Identity, ObjectQueryParams, FCollisionShape::MakeSphere(20.0f), QueryParams);
 
 	FVector ImpactPoint = bHit ? Hit.ImpactPoint : TraceEnd;
-	FRotator ProjectileRotation = FRotationMatrix::MakeFromX(ImpactPoint - HandLocation).Rotator();
+	FVector HandToImpact = (ImpactPoint - HandLocation).GetSafeNormal();
+	// 若手到目标点的方向与相机前向相反（朝上时Sweep误命中地面），回退用相机前向
+	FRotator ProjectileRotation = (FVector::DotProduct(HandToImpact, CameraComp->GetForwardVector()) > 0.f)
+		? FRotationMatrix::MakeFromX(HandToImpact).Rotator()
+		: CameraComp->GetForwardVector().Rotation();
 	FTransform SpawnTM = FTransform(ProjectileRotation, HandLocation);
 
 	FActorSpawnParameters SpawnParams;
@@ -185,6 +188,11 @@ void ASCharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponent*
 		APlayerController* PC = Cast<APlayerController>(GetController());
 		DisableInput(PC);
 	}
+}
+
+void ASCharacter::HealSelf(float Amount)
+{
+	AttributeComp->ApplyHealthChange(this, Amount);
 }
 
 

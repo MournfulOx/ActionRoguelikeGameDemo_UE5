@@ -323,6 +323,53 @@ ROOT
 
 **Level setup:** `NavMeshBoundsVolume` placed and scaled to cover the play area — provides pathfinding data used by Move To and EQS.
 
+### 20. 3D World-Space Health Bar (`USWorldUserWidget`)
+
+Enemy health bar that floats above the enemy in world space, appears on first hit, and disappears when the enemy dies.
+
+**C++ base class (`USWorldUserWidget`):**
+- Extends `UUserWidget`; overrides `NativeTick` (`bCanEverTick = true` set in the Blueprint constructor)
+- `UPROPERTY(meta=(BindWidget)) USizeBox* ParentSizeBox` — UMG slot anchored at `(0,0)`, sized to wrap the bar content; `SetRenderTranslation` moves it each tick
+- `UPROPERTY(BlueprintReadOnly) AActor* AttachedActor` — set by C++ before `AddToViewport()`
+- `UPROPERTY(EditAnywhere) FVector WorldOffset` — tunable vertical offset (e.g. above the head)
+- `NativeTick`: calls `UGameplayStatics::ProjectWorldToScreen` to get pixel coords, then divides by `UWidgetLayoutLibrary::GetViewportScale` for DPI correction before applying `SetRenderTranslation`; if `AttachedActor` becomes invalid (`!IsValid`), calls `RemoveFromParent()`
+
+**Integration in `ASAICharacter::OnHealthChanged`:**
+- Widget spawned only on first damage (`ActiveHealthBar == nullptr`), via `CreateWidget<USWorldUserWidget>(GetWorld(), HealthBarWidgetClass)` (owner must be the world, not the AICharacter)
+- `ActiveHealthBar->AttachedActor = this` assigned before `AddToViewport()` so the first `NativeTick` already has a valid actor reference
+- Widget auto-removes itself when the actor is destroyed (handled inside `NativeTick`)
+
+**Blueprint layer (`BP_MinionHealth_Widget`):**
+- Parent class set to `USWorldUserWidget`; contains a Canvas Panel → SizeBox (`ParentSizeBox`) → Progress Bar wired to `AttributeComp->GetHealth() / GetHealthMax()`
+
+### 21. Main HUD Framework (`WBP_Main_HUD`)
+
+A single container widget that bundles all player-facing HUD elements.
+
+- **`WBP_Main_HUD`**: added to viewport by `BP_OwnGameMode` on game start; uses a Canvas Panel to host child widgets at fixed screen positions
+  - `WBP_PlayerHealth` — health bar (bottom-centre), anchored with explicit position + size (not stretch anchors)
+  - `WBP_Crosshair` — static crosshair at screen centre
+  - `WBP_Credits` — placeholder credit display (top-right)
+  - `WBP_GameModeInfo` — top-left panel showing elapsed game time via `GameState->GetServerWorldTimeSeconds()` (multiplayer-safe)
+- `WBP_GameModeInfo` uses a Text widget bound in Blueprint: `Get Game State` → cast to `AGameState` → `GetServerWorldTimeSeconds()` → format as `MM:SS`
+
+### 22. Player Spawn via GameMode + PlayerStart
+
+Replaced the manually placed player character in the level with a proper spawn setup.
+
+- **`PlayerStart`** actor placed in the level — GameMode uses it as the preferred spawn point
+- **`DefaultPawnClass`** set in `BP_OwnGameMode` to `BP_Player` — the engine spawns and possesses the player automatically at game start
+- **Project Settings → Maps & Modes → Default Game Mode** points to `BP_OwnGameMode` so the setting is project-wide
+- The old `BP_Player` actor dragged directly into the level is removed — it was never possessed correctly and caused two characters to appear
+
+### 23. Debug Console Commands (`UFUNCTION(Exec)`)
+
+`UFUNCTION(Exec)` makes a member function callable as a typed console command during play. Works on: `APlayerController`, `ACharacter` (while possessed), `AGameMode`, `ACheatManager`.
+
+- **`ASCharacter::HealSelf(float Amount = 100.f)`** — calls `AttributeComp->ApplyHealthChange(this, Amount)`; type `HealSelf 50` in the console to restore 50 HP
+- **`ASGameModeBase::KillAll()`** — iterates all `ASAICharacter` actors via `TActorIterator`, calls `AttributeComp->Kill(this)` on every living bot; useful for testing respawn and spawn rate
+- **God Mode** — `CanBeDamaged` bool on `AActor` (built-in UE5); `USAttributeComponent::ApplyHealthChange` checks `!GetOwner()->CanBeDamaged()` and returns early; toggled via the built-in `God` console command (from `ACheatManager`)
+
 ### 19. AI Flee / Heal Behavior — Assignment 4
 
 When health drops below 30 %, the bot breaks off combat, retreats to a hidden position, heals to full, and resumes fighting — but can only flee once every 60 seconds.
@@ -389,6 +436,7 @@ Source/ActRouguelikeDemo/
 │   ├── SHealthPotion.h         # Health potion (heals pawn, ignores full health)
 │   ├── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
 │   ├── SAttributeComponent.h  # RPG attribute component (Health/HealthMax, delegate, dead-guard)
+│   ├── SWorldUserWidget.h      # World-space widget base (NativeTick, ProjectWorldToScreen, DPI scale)
 │   └── AI/
 │       ├── SAICharacter.h               # AI character + PawnSensing + AttributeComp + dissolve death
 │       ├── SAIController.h              # Runs BehaviorTree on BeginPlay (ensureMsgf guard)
@@ -410,6 +458,7 @@ Source/ActRouguelikeDemo/
     ├── ExplosiveBarrel.cpp
     ├── SAttributeComponent.cpp
     ├── SGameModeBase.cpp
+    ├── SWorldUserWidget.cpp
     └── AI/
         ├── SAICharacter.cpp
         ├── SAIController.cpp
@@ -443,7 +492,11 @@ Content/Blueprint/
 Content/UI/
 ├── WBP_Crosshair.uasset            # Crosshair HUD widget (UMG)
 ├── WBP_PlayerHealth.uasset         # Health bar (event-driven, HealthMax-aware init)
-└── WBP_DamagePopup.uasset          # Floating damage numbers (world-space, random offset, animation)
+├── WBP_DamagePopup.uasset          # Floating damage numbers (world-space, random offset, animation)
+├── WBP_Main_HUD.uasset             # HUD container (PlayerHealth + Crosshair + Credits + GameModeInfo)
+├── WBP_GameModeInfo.uasset         # Game time display using GameState::GetServerWorldTimeSeconds
+├── WBP_Credits.uasset              # Credit display placeholder
+└── WBP_MinionHealth.uasset         # Enemy health bar (extends USWorldUserWidget, shown on first hit)
 
 Content/Material/
 ├── M_HitFlashDemo.uasset           # Hit flash — TimeToHit scalar param, sine-wave fade
@@ -504,6 +557,12 @@ cd ActionRoguelikeGameDemo_UE5
 - [x] AI friendly fire prevention — `IsA(GetInstigator()->GetClass())` check in projectile overlap
 - [x] Bot animation polish — smooth rotation (`Use Desired Rotation`), blend space weight = 8
 - [x] AI flee / heal behavior — `USBTService_CheckHealth` + EQS hiding spot + `USBTTask_HealSelf` + 60 s cooldown
+- [x] 3D world-space health bar (`USWorldUserWidget`) — enemy health bar projected to screen, DPI-corrected, auto-removes on actor death
+- [x] Main HUD framework (`WBP_Main_HUD`) — container bundling PlayerHealth, Crosshair, Credits, and GameModeInfo widgets
+- [x] Game time display (`WBP_GameModeInfo`) — elapsed time via `GameState->GetServerWorldTimeSeconds()`
+- [x] Proper player spawn — GameMode `DefaultPawnClass` + `PlayerStart`, no manually placed pawn
+- [x] Debug console commands — `HealSelf(float)` and `KillAll()` via `UFUNCTION(Exec)`; God mode via `CanBeDamaged`
+- [x] Shooting accuracy — camera-position sphere trace with DotProduct fallback for steep upward angles
 - [ ] Migrate Pawn Sensing → AI Perception (deprecation warning)
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication

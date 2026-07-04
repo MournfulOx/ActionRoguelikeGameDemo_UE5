@@ -1,12 +1,13 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "AI/SAICharacter.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
 #include "Perception/PawnSensingComponent.h"
-#include "DrawDebugHelpers.h"
 #include "SAttributeComponent.h"
+#include "SWorldUserWidget.h"
+#include "Blueprint/UserWidget.h"
 #include "Components/CapsuleComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -35,8 +36,16 @@ void ASAICharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponen
 			SetTargetActor(InstigatorActor);
 		}
 		
-		// 受击闪光（死后不触发，避免覆盖 DissolveMI 参数）
 		GetMesh()->SetScalarParameterValueOnMaterials("TimeToHit", GetWorld()->GetTimeSeconds());
+		if (ActiveHealthBar == nullptr)
+		{
+			ActiveHealthBar = CreateWidget<USWorldUserWidget>(GetWorld(), HealthBarWidgetClass);
+			if  (ActiveHealthBar)
+			{
+				ActiveHealthBar->AttachedActor = this;
+				ActiveHealthBar->AddToViewport();
+			}
+		}
 	}
 
 	if (NewHealth <= 0.0f && Delta < 0.0f)
@@ -96,6 +105,5 @@ void ASAICharacter::SetTargetActor(AActor* NewTarget)
 void ASAICharacter::OnPawnSeen(APawn* Pawn)
 {
 		SetTargetActor(Pawn);
-		DrawDebugString(GetWorld(), GetActorLocation(), "PLAYER SPOTTED", nullptr, FColor::White, 4.0f, true);
 }
 	
