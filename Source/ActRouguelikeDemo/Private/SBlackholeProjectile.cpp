@@ -1,5 +1,5 @@
 #include "SBlackholeProjectile.h"
-#include "SAttributeComponent.h"
+#include "SGameplayFunctionLibrary.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/ProjectileMovementComponent.h"
@@ -89,11 +89,6 @@ void ASBlackholeProjectile::ApplyPullDamage()
 		float Distance = FVector::Dist(GetActorLocation(), Character->GetActorLocation());
 		if (Distance > PullRadius) continue;
 
-		USAttributeComponent* AttributeComp = Cast<USAttributeComponent>(
-			Character->GetComponentByClass(USAttributeComponent::StaticClass()));
-		if (AttributeComp)
-		{
-			AttributeComp->ApplyHealthChange(GetInstigator(), -DamagePerSecond);
-		}
+		USGameplayFunctionLibrary::ApplyDamage(GetInstigator(), Character, DamagePerSecond);
 	}
 }

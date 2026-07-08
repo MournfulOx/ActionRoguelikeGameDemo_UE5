@@ -10,8 +10,8 @@
 class UCameraComponent;
 class USpringArmComponent;
 class UInputComponent;
-class UAnimMontage;
 class USAttributeComponent;
+class USActionComponent;
 
 
 UCLASS()
@@ -33,29 +33,10 @@ protected:
 	
 	UPROPERTY(EditAnywhere)
 	USInteractionComponent* InteractionComp;
-	
-	// Primary Attack
-	UPROPERTY(EditAnywhere, Category = "Attack")
-	TSubclassOf<AActor> ProjectileClass;
-	
-	// Blackhole Attack
-	UPROPERTY(EditAnywhere, Category = "Attack")
-	TSubclassOf<AActor> BlackholeProjectileClass;
 
-	// Dash Attack
-	UPROPERTY(EditAnywhere, Category = "Attack")
-	TSubclassOf<AActor> DashProjectileClass;
-	
-	UPROPERTY(EditAnywhere, Category = "Attack")
-	UAnimMontage* AttackAnim;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category= "Components")
+	USActionComponent* ActionComp;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Attack")
-	UParticleSystem* CastingEffect;
-
-	FTimerHandle TimerHandle_PrimaryAttack;
-	FTimerHandle TimerHandle_BlackholeAttack;
-	FTimerHandle TimerHandle_DashAttack;
-	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USAttributeComponent* AttributeComp;
 	
@@ -70,14 +51,11 @@ public:
 	void MoveRight(float value);
 	void PrimaryAttack();
 	void BlackholeAttack();
-	void BlackholeAttack_TimeElapsed();
 	void DashAttack();
-	void DashAttack_TimeElapsed();
 	void PrimaryInteract();
-	void PrimaryAttack_TimeElapsed();
+	void SprintStart();
+	void SprintStop();
 
-	void SpawnProjectile(TSubclassOf<AActor> ClassToSpawn);
-	
 	UFUNCTION()
 	void OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComp, float NewHealth, float Delta);
 	

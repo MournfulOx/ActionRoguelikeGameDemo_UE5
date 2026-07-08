@@ -60,6 +60,7 @@ See [Releases](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/release
 | R | Dash / Teleport |
 | E | Interact with world |
 | Space | Jump |
+| Left Shift | Sprint |
 
 ---
 
@@ -71,9 +72,9 @@ See [Releases](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/release
 - World-space movement decoupled from camera yaw: `MoveForward` uses the controller's forward vector; `MoveRight` derives the right vector via `FRotationMatrix::GetScaledAxis(EAxis::Y)`, ensuring consistent strafe behavior at all camera angles
 - `bOrientRotationToMovement = true` with `bUseControllerRotationYaw = false` — the character mesh faces the movement direction, not the camera
 - Jump support via `ACharacter::Jump` / `StopJumping`
-- Attack driven by `UAnimMontage` + `FTimerHandle`: the montage plays first, then the projectile spawns at the correct animation frame (0.2 s delay) from the `Muzzle_01` skeletal socket
-- All three abilities share the same aim direction system: line trace from camera to crosshair, projectile rotated toward the impact point
-- Delegates attack and interaction to dedicated components, keeping `ASCharacter` thin
+- Owns a single `USActionComponent* ActionComp`; `PrimaryAttack()` / `BlackholeAttack()` / `DashAttack()` / `SprintStart()` / `SprintStop()` are one-line calls to `ActionComp->StartActionByName(this, "...")` / `StopActionByName(...)` — no ability logic, timers, or asset references live on the character anymore (see [Action System](#24-action-system--custom-gameplay-ability-system-alternative-usactioncomponent--usaction))
+- All three attack abilities share the same aim direction system (camera-to-crosshair line trace), now implemented once in `USAction_ProjectileAttack` instead of being duplicated per-attack
+- Delegates attack, interaction, and ability logic to dedicated components, keeping `ASCharacter` thin
 
 ### 2. Primary Attack — Magic Projectile (`AAMagicProjectile` + `BP_MagicProjectile`)
 
@@ -84,20 +85,21 @@ See [Releases](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/release
 - `UProjectileMovementComponent`: initial speed 1000 cm/s, zero gravity, velocity-aligned rotation
 - `UParticleSystemComponent` for in-flight VFX
 - Dual hit response:
-  - **Blocking hit** (`NotifyHit`): applies 20 point damage to the hit actor — handles physics-simulated actors such as the explosive barrel
-  - **Overlap hit** (`OnActorOverlap`): applies 20 point damage via `UGameplayStatics::ApplyPointDamage`, then destroys self
+  - **Blocking hit** (`NotifyHit`): falls back to `UGameplayStatics::ApplyDamage` for actors with no `USAttributeComponent` (e.g. standard `TakeDamage`-based actors)
+  - **Overlap hit** (`OnActorOverlap`): calls `USGameplayFunctionLibrary::ApplyDirectionalDamage(GetInstigator(), OtherActor, DamageAmount, SweepResult)` — applies damage and, if the hit component is physics-simulated, a directional knockback impulse — then destroys self
 
 **Blueprint layer (`BP_MagicProjectile`):**
 - `On Component Hit` event: spawns impact particle effect and destroys the projectile on any blocking collision
 - Instigator ignored via `Ignore Actor when Moving` on `BeginPlay` to prevent self-collision
 
-### 3. Blackhole Ability (`BP_BlackholeProjectile`)
+### 3. Blackhole Ability (`ASBlackholeProjectile` + `BP_BlackholeProjectile`)
 
-Pure Blueprint projectile. Fired from `Muzzle_01` toward the camera crosshair (same aim system as primary attack, bound to **Q**).
+C++ projectile fired from `Muzzle_01` toward the camera crosshair (same aim system as primary attack, bound to **Q**, granted via `BP_ActionBlackhole`).
 
-- `URadialForceComponent` set to **attraction** mode continuously pulls nearby physics-simulated actors toward the center while active
-- `On Component Begin Overlap`: any actor with physics simulation enabled (`IsSimulatingPhysics`) is destroyed on contact
-- Self-destructs after **5 seconds** via a Blueprint `Delay` node, cleaning up the radial force field
+- `USphereComponent` root (`PullSphereComp`, 20 cm radius, blocks `ECC_WorldStatic` only) stops the projectile on walls; `UProjectileMovementComponent` (speed 800, zero gravity) flies it out
+- `Tick`: stops flight once it travels `MaxRange`; every frame, pulls any `ASAICharacter` within `PullRadius` toward itself via `AddActorWorldOffset`, and pulls physics-simulated actors (barrels, cubes — excluding AI/self/instigator) via `AddForce` scaled by mass
+- `ApplyPullDamage` (1 s repeating timer, started in `BeginPlay`): applies `DamagePerSecond` to every AI within `PullRadius` via `USGameplayFunctionLibrary::ApplyDamage`
+- `NotifyHit` stops movement immediately on wall impact; `SetLifeSpan(LifeSpanDuration)` handles self-destruction
 
 ### 4. Dash / Teleport (`ASDashProjectile` + `BP_DashProjectile`)
 
@@ -370,6 +372,41 @@ Replaced the manually placed player character in the level with a proper spawn s
 - **`ASGameModeBase::KillAll()`** — iterates all `ASAICharacter` actors via `TActorIterator`, calls `AttributeComp->Kill(this)` on every living bot; useful for testing respawn and spawn rate
 - **God Mode** — `CanBeDamaged` bool on `AActor` (built-in UE5); `USAttributeComponent::ApplyHealthChange` checks `!GetOwner()->CanBeDamaged()` and returns early; toggled via the built-in `God` console command (from `ACheatManager`)
 
+### 24. Action System — Custom Gameplay Ability System Alternative (`USActionComponent` + `USAction`)
+
+A lightweight, hand-rolled alternative to Epic's Gameplay Ability System (GAS) — built to learn the underlying concepts (grantable abilities, per-actor action instances, code separation) without GAS's setup overhead. Any actor can gain abilities simply by attaching `USActionComponent`.
+
+**`USActionComponent` (`UActorComponent`):**
+- `TArray<USAction*> Actions` — runtime instances owned by this component
+- `TArray<TSubclassOf<USAction>> DefaultActions` (`EditAnywhere`) — actions granted automatically; `BeginPlay` loops over it and calls `AddAction()` for each, so abilities are data-driven per-Blueprint instead of wired by hand in the event graph
+- `AddAction(TSubclassOf<USAction> ActionClass)` — `NewObject<USAction>(this, ActionClass)`, appends to `Actions`
+- `StartActionByName(Instigator, FName ActionName)` / `StopActionByName(...)` — linear search by `ActionName`, calls the matching action's `StartAction` / `StopAction`
+
+**`USAction` (`UObject`, `Blueprintable`):**
+- `FName ActionName` — identifies the action for `StartActionByName` lookups
+- `StartAction` / `StopAction` — `BlueprintNativeEvent`, so actions can be pure C++, pure Blueprint, or a C++ base extended in Blueprint
+- Overrides `GetWorld()` by walking the Outer chain (`Cast<UActorComponent>(GetOuter())->GetWorld()`) — required because a plain `UObject` has no world context of its own, and `NewObject` sets the owning `USActionComponent` as the Outer
+
+**`USAction_ProjectileAttack` (C++ subclass of `USAction`):**
+- Consolidates the "play montage → wait → spawn projectile toward the crosshair" pattern that used to be duplicated across all three player attacks in `ASCharacter`
+- `StartAction_Implementation`: plays `AttackAnim`, spawns `CastingEffect` at the `HandSocketName` socket, starts a timer (`AttackAnimDelay`) to `AttackDelay_Elapsed`
+- `AttackDelay_Elapsed`: fetches the instigator's camera via `FindComponentByClass<UCameraComponent>()`, re-runs the camera-to-crosshair aim trace (same sphere-sweep + dot-product fallback logic previously in `ASCharacter::SpawnProjectile`), spawns `ProjectileClass`, then calls `StopAction`
+- `BP_ActionMagicProjectile`, `BP_ActionBlackhole`, `BP_ActionDash` are thin, data-only Blueprint subclasses — each just assigns a different `ProjectileClass` / `AttackAnim` / `CastingEffect`
+
+**`BP_ActionSprint` (Blueprint subclass of plain `USAction`):**
+- Overrides `StartAction` / `StopAction` to add/remove a `BonusSpeed` value on `CharacterMovementComponent::MaxWalkSpeed` — no C++ needed since the logic is a single variable set
+
+**Result:** `SCharacter.h` / `.cpp` no longer own `ProjectileClass`, `BlackholeProjectileClass`, `DashProjectileClass`, `AttackAnim`, `CastingEffect`, any `FTimerHandle`, or `SpawnProjectile()` — all of that now lives in the Action classes, and `BP_Player`'s `ActionComp` lists the four action Blueprints in `DefaultActions` to grant them at `BeginPlay`.
+
+### 25. Gameplay Function Library — Centralized Damage Application (`USGameplayFunctionLibrary`)
+
+A `UBlueprintFunctionLibrary` that replaces the "get `USAttributeComponent` → call `ApplyHealthChange`" pattern that had been copy-pasted across every projectile's overlap/hit handler.
+
+- **`ApplyDamage(DamageCauser, TargetActor, DamageAmount)`** — `USAttributeComponent::GetAttributes(TargetActor)` + `ApplyHealthChange(DamageCauser, -DamageAmount)`, wrapped in one static call
+- **`ApplyDirectionalDamage(DamageCauser, TargetActor, DamageAmount, const FHitResult& HitResult)`** — calls `ApplyDamage`, then if the hit component `IsSimulatingPhysics(BoneName)`, applies a knockback impulse: `AddImpulseAtLocation(Direction * 300000.f, ImpactPoint, BoneName)`
+  - **Direction is `(HitResult.TraceEnd - HitResult.TraceStart).GetSafeNormal()`, not `HitResult.ImpactNormal`** — `ImpactNormal` only reflects the struck surface's geometry (e.g. hitting the side of a head knocks it sideways even when shot from the front), producing inconsistent-looking knockback; using the trace vector always knocks the target away from where the shot actually came from
+- Adopted by `AAMagicProjectile::OnActorOverlap` and `ASAIProjectile::OnActorOverlap` (both have a `SweepResult` available) for directional knockback on physics-simulated hits (e.g. `ExplosiveBarrel`, AI ragdolls); `ASBlackholeProjectile::ApplyPullDamage` (timer-tick damage-over-time, no hit result available) uses plain `ApplyDamage`
+
 ### 19. AI Flee / Heal Behavior — Assignment 4
 
 When health drops below 30 %, the bot breaks off combat, retreats to a hidden position, heals to full, and resumes fighting — but can only flee once every 60 seconds.
@@ -431,12 +468,18 @@ Source/ActRouguelikeDemo/
 │   ├── SItemChest.h            # Interactable treasure chest
 │   ├── SProjectileBase.h       # Projectile base (movement, VFX, audio, camera shake)
 │   ├── AMagicProjectile.h      # Magic projectile (overlap damage, blocking hit)
+│   ├── SBlackholeProjectile.h  # Blackhole projectile (pull, AoE tick damage)
+│   ├── SAIProjectile.h         # AI ranged attack projectile
 │   ├── SDashProjectile.h       # Dash/teleport projectile
 │   ├── SPowerupActor.h         # Powerup base (interact, respawn timer, hide/show)
 │   ├── SHealthPotion.h         # Health potion (heals pawn, ignores full health)
 │   ├── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
 │   ├── SAttributeComponent.h  # RPG attribute component (Health/HealthMax, delegate, dead-guard)
 │   ├── SWorldUserWidget.h      # World-space widget base (NativeTick, ProjectWorldToScreen, DPI scale)
+│   ├── SActionComponent.h      # Action System: owns/grants USAction instances (DefaultActions, StartActionByName)
+│   ├── SAction.h                # Action System: base UObject action (ActionName, StartAction/StopAction, GetWorld via Outer)
+│   ├── SAction_ProjectileAttack.h  # Action: montage → delayed projectile spawn (shared by all 3 attacks)
+│   ├── SGameplayFunctionLibrary.h  # Static damage helpers (ApplyDamage, ApplyDirectionalDamage w/ knockback)
 │   └── AI/
 │       ├── SAICharacter.h               # AI character + PawnSensing + AttributeComp + dissolve death
 │       ├── SAIController.h              # Runs BehaviorTree on BeginPlay (ensureMsgf guard)
@@ -452,6 +495,8 @@ Source/ActRouguelikeDemo/
     ├── SItemChest.cpp
     ├── SProjectileBase.cpp
     ├── AMagicProjectile.cpp
+    ├── SBlackholeProjectile.cpp
+    ├── SAIProjectile.cpp
     ├── SDashProjectile.cpp
     ├── SPowerupActor.cpp
     ├── SHealthPotion.cpp
@@ -459,6 +504,10 @@ Source/ActRouguelikeDemo/
     ├── SAttributeComponent.cpp
     ├── SGameModeBase.cpp
     ├── SWorldUserWidget.cpp
+    ├── SActionComponent.cpp
+    ├── SAction.cpp
+    ├── SAction_ProjectileAttack.cpp
+    ├── SGameplayFunctionLibrary.cpp
     └── AI/
         ├── SAICharacter.cpp
         ├── SAIController.cpp
@@ -484,10 +533,16 @@ Content/Blueprint/
 ├── BP_MagicProjectile.uasset       # Primary projectile (audio, camera shake, casting FX)
 ├── BP_BlackholeProjectile.uasset   # Blackhole ability (RadialForce, auto-destroy)
 ├── BP_DashProjectile.uasset        # Dash ability (teleport effect config)
-├── BP_Player.uasset                # Player Blueprint (ability refs, damage popup binding)
+├── BP_Player.uasset                # Player Blueprint (ActionComp::DefaultActions, damage popup binding)
 ├── BP_HealthPotion.uasset          # Health potion pickup (SM_PotionBottle, 10s respawn)
 ├── BP_TestAttack.uasset            # Test enemy (timed attack, hit flash, damage popup)
 └── BP_GameMode.uasset              # Game mode (HUD widget setup)
+
+Content/Actions/
+├── BP_ActionMagicProjectile.uasset # extends SAction_ProjectileAttack — primary attack config
+├── BP_ActionBlackhole.uasset       # extends SAction_ProjectileAttack — blackhole attack config
+├── BP_ActionDash.uasset            # extends SAction_ProjectileAttack — dash attack config
+└── BP_ActionSprint.uasset          # extends SAction — adds/removes MaxWalkSpeed bonus
 
 Content/UI/
 ├── WBP_Crosshair.uasset            # Crosshair HUD widget (UMG)
@@ -563,6 +618,9 @@ cd ActionRoguelikeGameDemo_UE5
 - [x] Proper player spawn — GameMode `DefaultPawnClass` + `PlayerStart`, no manually placed pawn
 - [x] Debug console commands — `HealSelf(float)` and `KillAll()` via `UFUNCTION(Exec)`; God mode via `CanBeDamaged`
 - [x] Shooting accuracy — camera-position sphere trace with DotProduct fallback for steep upward angles
+- [x] Custom Action System (`USActionComponent` + `USAction`) — hand-rolled GAS alternative; `DefaultActions` grants abilities at `BeginPlay`; `USAction_ProjectileAttack` consolidates the 3 attack abilities; Sprint action added
+- [x] Refactored all attack/ability logic out of `ASCharacter` into standalone `USAction` subclasses — character class no longer owns projectile classes, anim montages, VFX refs, or attack timers
+- [x] Centralized damage application (`USGameplayFunctionLibrary`) — `ApplyDamage` / `ApplyDirectionalDamage`; fixed knockback direction bug (trace vector instead of impact normal) for consistent physics impulses on barrels and AI ragdolls
 - [ ] Migrate Pawn Sensing → AI Perception (deprecation warning)
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication

@@ -1,5 +1,5 @@
 #include "SAIProjectile.h"
-#include "SAttributeComponent.h"
+#include "SGameplayFunctionLibrary.h"
 #include "SProjectileBase.h"
 #include "Components/SphereComponent.h"
 
@@ -18,12 +18,7 @@ void ASAIProjectile::OnActorOverlap(UPrimitiveComponent* OverlappedComponent, AA
 	// 防止 AI 互伤
 	if (GetInstigator() && OtherActor->IsA(GetInstigator()->GetClass())) return;
 
-	USAttributeComponent* AttributeComp = Cast<USAttributeComponent>(
-		OtherActor->GetComponentByClass(USAttributeComponent::StaticClass()));
-	if (AttributeComp)
-	{
-		AttributeComp->ApplyHealthChange(GetInstigator(), -DamageAmount);
-	}
+	USGameplayFunctionLibrary::ApplyDirectionalDamage(GetInstigator(), OtherActor, DamageAmount, SweepResult);
 
 	Explode();
 }

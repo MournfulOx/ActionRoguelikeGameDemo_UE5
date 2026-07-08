@@ -72,11 +72,15 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` (not in PATH — call with full path or `& "C:\Program Files\GitHub CLI\gh.exe"`)
 - Git LFS is active for `.uasset` / `.umap` files
 
-## Current feature set (as of v0.5)
+## Current feature set (as of v0.6)
 
 - Third-person character with spring-arm camera, WASD move, mouse look, jump
+- **Action System** (custom GAS alternative): `USActionComponent` (`Actions`/`DefaultActions`, `AddAction`, `StartActionByName`/`StopActionByName`) + `USAction` base (`UObject`, `Blueprintable`, `ActionName`, `StartAction`/`StopAction` as `BlueprintNativeEvent`, `GetWorld()` via Outer chain); `ASCharacter` now only owns `ActionComp` — all ability logic, timers, and asset refs moved out of the character class
+- `USAction_ProjectileAttack`: consolidates "play montage → delay → spawn projectile toward crosshair" (shared by primary/blackhole/dash attacks); `BP_ActionMagicProjectile`/`BP_ActionBlackhole`/`BP_ActionDash` are data-only Blueprint subclasses
+- Sprint (Left Shift): `BP_ActionSprint` (extends `USAction`), adds/removes `BonusSpeed` on `MaxWalkSpeed`
+- `USGameplayFunctionLibrary`: `ApplyDamage` / `ApplyDirectionalDamage` (physics knockback via `AddImpulseAtLocation`, direction = `TraceEnd - TraceStart` normalized, not `ImpactNormal`) — replaces duplicated damage code across all projectiles
 - Primary attack: magic projectile, camera line-trace aim correction (self-ignore fix)
-- Blackhole ability (Q): Blueprint, RadialForce attraction, destroys simulating actors on overlap, 5s auto-destroy
+- Blackhole ability (Q): C++ `ASBlackholeProjectile` (pull + AoE tick damage) + Blueprint VFX, RadialForce attraction, destroys simulating actors on overlap, 5s auto-destroy
 - Dash/Teleport (R): C++ `ASDashProjectile`, teleports player to impact location with particle effects
 - Crosshair HUD widget (UMG, `WBP_Crosshair`)
 - Explosive barrel: physics-simulated, `URadialForceComponent`, `TakeDamage` → `Explode()`
@@ -107,11 +111,13 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - **Main HUD framework**: `WBP_Main_HUD` container widget added via GameMode; bundles `WBP_PlayerHealth`, `WBP_Crosshair`, `WBP_Credits`, `WBP_GameModeInfo`; `WBP_GameModeInfo` shows elapsed time via `GameState->GetServerWorldTimeSeconds()`
 - **Player spawn via GameMode + PlayerStart**: no manually placed pawn; `DefaultPawnClass = BP_Player` in `BP_OwnGameMode`; `PlayerStart` in level; Project Settings Default Game Mode set accordingly
 - **Console exec commands** (`UFUNCTION(Exec)`): `ASCharacter::HealSelf(float Amount)` heals player; `ASGameModeBase::KillAll()` kills all bots via `TActorIterator`; God mode via `CanBeDamaged` bool checked in `USAttributeComponent::ApplyHealthChange`
-- **Shooting accuracy fix**: `SpawnProjectile` traces from `CameraComp->GetComponentLocation()` (not eye height); DotProduct check — if `HandToImpact` opposes camera forward, fall back to camera forward (fixes steep upward angle shooting into ground)
+- **Shooting accuracy fix**: aim trace (now in `USAction_ProjectileAttack::AttackDelay_Elapsed`) traces from the character's camera component location (not eye height); DotProduct check — if `HandToImpact` opposes camera forward, fall back to camera forward (fixes steep upward angle shooting into ground)
 - **Debug draw cleanup**: removed all `DrawDebugSphere`/`DrawDebugLine`/`DrawDebugString` calls from `SInteractionComponent`, `SGameModeBase`, `SAICharacter`; removed `#include "DrawDebugHelpers.h"` from all three
 
 ## Roadmap (next up)
 
+- GameplayTags for action/state labeling (e.g. `Action.IsSprinting`, `DamageType.Melee.Slashing`) — next lecture topic
+- Grant actions dynamically at runtime (e.g. treasure chest grants a random ability) instead of only via `DefaultActions`
 - Migrate `UPawnSensingComponent` → AI Perception (deprecation warning)
 - Enhanced Input System migration
 - Additional interactables and pick-ups

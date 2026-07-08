@@ -3,13 +3,12 @@
 
 #include "SCharacter.h"
 
+#include "SActionComponent.h"
 #include "SAttributeComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Kismet/GameplayStatics.h"
 #include "SInteractionComponent.h"
-#include "SAttributeComponent.h"
 
 // Sets default values
 ASCharacter::ASCharacter()
@@ -30,6 +29,8 @@ ASCharacter::ASCharacter()
 	bUseControllerRotationYaw = false;
 	
 	AttributeComp = CreateDefaultSubobject<USAttributeComponent>("AttributeComp");
+	
+	ActionComp = CreateDefaultSubobject<USActionComponent>("ActionComp");
 	
 	
 
@@ -79,9 +80,7 @@ void ASCharacter::MoveRight(float value)
 
 void ASCharacter::PrimaryAttack()
 {
-	if (GetWorldTimerManager().IsTimerActive(TimerHandle_PrimaryAttack)) return;
-	PlayAnimMontage(AttackAnim);
-	GetWorldTimerManager().SetTimer(TimerHandle_PrimaryAttack, this, &ASCharacter::PrimaryAttack_TimeElapsed, 0.2f);
+	ActionComp->StartActionByName(this, "PrimaryAttack");
 }
 
 // Called to bind functionality to input
@@ -89,11 +88,11 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	// 移动
+	// Move
 	PlayerInputComponent->BindAxis("MoveForward", this, &ASCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight",   this, &ASCharacter::MoveRight);
 
-	// 鼠标转向
+	// Mouse
 	PlayerInputComponent->BindAxis("Turn",   this, &APawn::AddControllerYawInput);
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 	
@@ -110,70 +109,35 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	
 	// Interaction
 	PlayerInputComponent->BindAction("PrimaryInteract", IE_Pressed,   this, &ASCharacter::PrimaryInteract);
+	
+	// Run
+	PlayerInputComponent->BindAction("Sprint", IE_Pressed, this, &ASCharacter::SprintStart);
+	PlayerInputComponent->BindAction("Sprint", IE_Released, this, &ASCharacter::SprintStop);
 }
 
-void ASCharacter::PrimaryAttack_TimeElapsed()
+
+void ASCharacter::SprintStart()
 {
-	SpawnProjectile(ProjectileClass);
+	ActionComp->StartActionByName(this, "Sprint");
+}
+
+void ASCharacter::SprintStop()
+{
+	ActionComp->StopActionByName(this, "Sprint");
 }
 
 void ASCharacter::BlackholeAttack()
 {
-	PlayAnimMontage(AttackAnim);
-	GetWorldTimerManager().SetTimer(TimerHandle_BlackholeAttack, this, &ASCharacter::BlackholeAttack_TimeElapsed, 0.2f);
+	ActionComp->StartActionByName(this, "Blackhole");
 }
 
-void ASCharacter::BlackholeAttack_TimeElapsed()
-{
-	SpawnProjectile(BlackholeProjectileClass);
-}
+
 
 void ASCharacter::DashAttack()
 {
-	PlayAnimMontage(AttackAnim);
-	GetWorldTimerManager().SetTimer(TimerHandle_DashAttack, this, &ASCharacter::DashAttack_TimeElapsed, 0.2f);
+	ActionComp->StartActionByName(this, "Dash");
 }
 
-void ASCharacter::DashAttack_TimeElapsed()
-{
-	SpawnProjectile(DashProjectileClass);
-}
-
-void ASCharacter::SpawnProjectile(TSubclassOf<AActor> ClassToSpawn)
-{
-	if (!ensureAlways(ClassToSpawn)) return;
-
-	FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
-	FVector TraceStart = CameraComp->GetComponentLocation();
-	FVector TraceEnd = TraceStart + CameraComp->GetForwardVector() * 5000.0f;
-
-	FCollisionObjectQueryParams ObjectQueryParams;
-	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
-	ObjectQueryParams.AddObjectTypesToQuery(ECC_Pawn);
-
-	FCollisionQueryParams QueryParams;
-	QueryParams.AddIgnoredActor(this);
-
-	FHitResult Hit;
-	bool bHit = GetWorld()->SweepSingleByObjectType(Hit, TraceStart, TraceEnd, FQuat::Identity, ObjectQueryParams, FCollisionShape::MakeSphere(20.0f), QueryParams);
-
-	FVector ImpactPoint = bHit ? Hit.ImpactPoint : TraceEnd;
-	FVector HandToImpact = (ImpactPoint - HandLocation).GetSafeNormal();
-	// 若手到目标点的方向与相机前向相反（朝上时Sweep误命中地面），回退用相机前向
-	FRotator ProjectileRotation = (FVector::DotProduct(HandToImpact, CameraComp->GetForwardVector()) > 0.f)
-		? FRotationMatrix::MakeFromX(HandToImpact).Rotator()
-		: CameraComp->GetForwardVector().Rotation();
-	FTransform SpawnTM = FTransform(ProjectileRotation, HandLocation);
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	SpawnParams.Instigator = this;
-
-	GetWorld()->SpawnActor<AActor>(ClassToSpawn, SpawnTM, SpawnParams);
-
-	UGameplayStatics::SpawnEmitterAttached(CastingEffect, GetMesh(), "Muzzle_01");
-}
 
 void ASCharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComp, float NewHealth,
 	float Delta)
