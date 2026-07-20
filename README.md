@@ -61,6 +61,7 @@ See [Releases](https://github.com/MournfulOx/ActionRoguelikeGameDemo_UE5/release
 | E | Interact with world |
 | Space | Jump |
 | Left Shift | Sprint |
+| Right Mouse Button | Parry (reflect projectiles back at the attacker) |
 
 ---
 
@@ -380,11 +381,14 @@ A lightweight, hand-rolled alternative to Epic's Gameplay Ability System (GAS) �
 - `TArray<USAction*> Actions` — runtime instances owned by this component
 - `TArray<TSubclassOf<USAction>> DefaultActions` (`EditAnywhere`) — actions granted automatically; `BeginPlay` loops over it and calls `AddAction()` for each, so abilities are data-driven per-Blueprint instead of wired by hand in the event graph
 - `AddAction(TSubclassOf<USAction> ActionClass)` — `NewObject<USAction>(this, ActionClass)`, appends to `Actions`
-- `StartActionByName(Instigator, FName ActionName)` / `StopActionByName(...)` — linear search by `ActionName`, calls the matching action's `StartAction` / `StopAction`
+- `StartActionByName(Instigator, FName ActionName)` / `StopActionByName(...)` — linear search by `ActionName`; `StartActionByName` calls `Action->CanStart(Instigator)` first and skips (with an on-screen debug message) if blocked; `StopActionByName` only stops actions where `IsRunning()` is true
+- `FGameplayTagContainer ActiveGameplayTags` (`EditAnywhere, BlueprintReadWrite`) — the single source of truth for "what states/tags does this actor currently have"; printed every tick via `GEngine->AddOnScreenDebugMessage` for live debugging
 
 **`USAction` (`UObject`, `Blueprintable`):**
 - `FName ActionName` — identifies the action for `StartActionByName` lookups
-- `StartAction` / `StopAction` — `BlueprintNativeEvent`, so actions can be pure C++, pure Blueprint, or a C++ base extended in Blueprint
+- `StartAction` / `StopAction` — `BlueprintNativeEvent`; base implementation appends/removes `FGameplayTagContainer GrantsTage` on the owning component's `ActiveGameplayTags` and tracks `bIsRunning`, so any subclass calling `Super::StartAction_Implementation` gets tag granting for free
+- `CanStart(AActor*)` — `BlueprintNativeEvent`; base implementation returns `false` if already running or if `ActiveGameplayTags.HasAny(BlockedTags)` — lets one action block another via tags instead of hardcoded checks (e.g. can't sprint while attacking)
+- `IsRunning()` — exposes `bIsRunning` to Blueprint/`USActionComponent`
 - Overrides `GetWorld()` by walking the Outer chain (`Cast<UActorComponent>(GetOuter())->GetWorld()`) — required because a plain `UObject` has no world context of its own, and `NewObject` sets the owning `USActionComponent` as the Outer
 
 **`USAction_ProjectileAttack` (C++ subclass of `USAction`):**
@@ -439,6 +443,26 @@ ROOT
 - The Cooldown decorator on the flee Sequence prevents re-entry for 60 s after healing completes
 - After healing, `LowHealth` becomes false (health is full), so the Selector falls through to the attack branch and combat resumes normally
 
+### 26. GameplayTags & Parry System (`Status.Parrying`)
+
+Parrying, built on Unreal's native `FGameplayTag` / `FGameplayTagContainer` system instead of ad-hoc booleans, so any actor with a `USActionComponent` can gain the ability with zero casts to concrete classes.
+
+**Tag setup:**
+- `Status.Parrying` registered in `Config/DefaultGameplayTags.ini`
+- `USActionComponent::ActiveGameplayTags` (already existed for `GrantsTage`/`BlockedTags` comparisons) is the single source of truth for "is this actor currently parrying"
+
+**Reflection logic — shared on `ASProjectileBase` (not duplicated per projectile class):**
+- `FGameplayTag ParryTag` (`EditDefaultsOnly`) — set per Blueprint (`BP_MagicProjectile`, `BP_AIProjectile` both set it to `Status.Parrying`)
+- `TryParryReflect(AActor* OtherActor)`: casts `OtherActor`'s `USActionComponent`, checks `ActiveGameplayTags.HasTag(ParryTag)`; if set, reverses `MovementComp->Velocity` (`bRotationFollowsVelocity` on the movement component means the mesh visually turns around too) and calls `SetInstigator(Cast<APawn>(OtherActor))` so the reflected projectile now credits/damages its original shooter — returns `true` if handled
+- Both `AAMagicProjectile::OnActorOverlap` and `ASAIProjectile::OnActorOverlap` call `TryParryReflect` first and `return` early on success, before their normal friendly-fire / damage logic runs — this is why the check lives on the shared base instead of just the player's magic projectile: AI-fired projectiles (`ASAIProjectile`, a separate class from `AAMagicProjectile`) need the exact same check or parrying an AI attack silently no-ops
+
+**`USAction_Parry` (C++ `USAction` subclass) + `BP_ActionParry`:**
+- `StartAction_Implementation`: calls `Super` (grants `GrantsTage` — set to `Status.Parrying` on the Blueprint default — via the base class's existing `ActiveGameplayTags.AppendTags` logic), optionally plays `ParryAnim`, then starts a `ParryDuration` (0.3s default) timer
+- Timer elapses → `ParryDuration_Elapsed` calls `StopAction`, which removes the tag again (`Super::StopAction_Implementation`) — a self-expiring buff, no manual stop input needed
+- `BP_ActionParry` is a thin, data-only Blueprint child (same pattern as `BP_ActionSprint`) — added to `BP_Player`'s `ActionComp::DefaultActions`, bound to Right Mouse Button
+
+**AI-side support (in place, not yet used):** `ASAICharacter` was also given a `USActionComponent* ActionComp` in the constructor, so AI minions could be granted `BP_ActionParry` too (matching the course's demo of two bots ping-ponging a projectile) — not currently wired into `BP_MinionRanged`'s default actions.
+
 ### 16. Input Bindings
 
 Legacy axis/action input configured in `DefaultInput.ini`:
@@ -454,6 +478,7 @@ Legacy axis/action input configured in `DefaultInput.ini`:
 | R | `DashAttack` action | Fire dash/teleport projectile |
 | Space | `Jump` action | Jump |
 | E | `PrimaryInteract` action | Interact with world |
+| Right Mouse Button | `Parry` action | Grant `Status.Parrying` tag for 0.3s, reflecting incoming projectiles |
 
 ---
 
@@ -466,7 +491,7 @@ Source/ActRouguelikeDemo/
 │   ├── SInteractionComponent.h # Sphere-sweep interaction component
 │   ├── SGameplayInterface.h    # UE5 interface for interactable actors
 │   ├── SItemChest.h            # Interactable treasure chest
-│   ├── SProjectileBase.h       # Projectile base (movement, VFX, audio, camera shake)
+│   ├── SProjectileBase.h       # Projectile base (movement, VFX, audio, camera shake, shared ParryTag/TryParryReflect)
 │   ├── AMagicProjectile.h      # Magic projectile (overlap damage, blocking hit)
 │   ├── SBlackholeProjectile.h  # Blackhole projectile (pull, AoE tick damage)
 │   ├── SAIProjectile.h         # AI ranged attack projectile
@@ -479,9 +504,10 @@ Source/ActRouguelikeDemo/
 │   ├── SActionComponent.h      # Action System: owns/grants USAction instances (DefaultActions, StartActionByName)
 │   ├── SAction.h                # Action System: base UObject action (ActionName, StartAction/StopAction, GetWorld via Outer)
 │   ├── SAction_ProjectileAttack.h  # Action: montage → delayed projectile spawn (shared by all 3 attacks)
+│   ├── SAction_Parry.h          # Action: grants Status.Parrying tag for ParryDuration, self-expiring via timer
 │   ├── SGameplayFunctionLibrary.h  # Static damage helpers (ApplyDamage, ApplyDirectionalDamage w/ knockback)
 │   └── AI/
-│       ├── SAICharacter.h               # AI character + PawnSensing + AttributeComp + dissolve death
+│       ├── SAICharacter.h               # AI character + PawnSensing + AttributeComp + ActionComp + dissolve death
 │       ├── SAIController.h              # Runs BehaviorTree on BeginPlay (ensureMsgf guard)
 │       ├── SBTService_ChackAttackRange.h  # BT Service: distance + LOS → WithinAttackRange
 │       ├── SBTService_CheckHealth.h     # BT Service: health fraction → LowHealth bool
@@ -507,6 +533,7 @@ Source/ActRouguelikeDemo/
     ├── SActionComponent.cpp
     ├── SAction.cpp
     ├── SAction_ProjectileAttack.cpp
+    ├── SAction_Parry.cpp
     ├── SGameplayFunctionLibrary.cpp
     └── AI/
         ├── SAICharacter.cpp
@@ -542,7 +569,8 @@ Content/Actions/
 ├── BP_ActionMagicProjectile.uasset # extends SAction_ProjectileAttack — primary attack config
 ├── BP_ActionBlackhole.uasset       # extends SAction_ProjectileAttack — blackhole attack config
 ├── BP_ActionDash.uasset            # extends SAction_ProjectileAttack — dash attack config
-└── BP_ActionSprint.uasset          # extends SAction — adds/removes MaxWalkSpeed bonus
+├── BP_ActionSprint.uasset          # extends SAction — adds/removes MaxWalkSpeed bonus
+└── BP_ActionParry.uasset           # extends SAction_Parry — grants Status.Parrying, bound to Right Mouse Button
 
 Content/UI/
 ├── WBP_Crosshair.uasset            # Crosshair HUD widget (UMG)
@@ -621,6 +649,7 @@ cd ActionRoguelikeGameDemo_UE5
 - [x] Custom Action System (`USActionComponent` + `USAction`) — hand-rolled GAS alternative; `DefaultActions` grants abilities at `BeginPlay`; `USAction_ProjectileAttack` consolidates the 3 attack abilities; Sprint action added
 - [x] Refactored all attack/ability logic out of `ASCharacter` into standalone `USAction` subclasses — character class no longer owns projectile classes, anim montages, VFX refs, or attack timers
 - [x] Centralized damage application (`USGameplayFunctionLibrary`) — `ApplyDamage` / `ApplyDirectionalDamage`; fixed knockback direction bug (trace vector instead of impact normal) for consistent physics impulses on barrels and AI ragdolls
+- [x] GameplayTags & Parry system — `Status.Parrying` tag; `TryParryReflect` shared on `ASProjectileBase` (used by both player and AI projectiles); `USAction_Parry` self-expiring buff action, bound to Right Mouse Button
 - [ ] Migrate Pawn Sensing → AI Perception (deprecation warning)
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication

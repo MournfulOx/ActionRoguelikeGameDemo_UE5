@@ -75,7 +75,7 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 ## Current feature set (as of v0.6)
 
 - Third-person character with spring-arm camera, WASD move, mouse look, jump
-- **Action System** (custom GAS alternative): `USActionComponent` (`Actions`/`DefaultActions`, `AddAction`, `StartActionByName`/`StopActionByName`) + `USAction` base (`UObject`, `Blueprintable`, `ActionName`, `StartAction`/`StopAction` as `BlueprintNativeEvent`, `GetWorld()` via Outer chain); `ASCharacter` now only owns `ActionComp` — all ability logic, timers, and asset refs moved out of the character class
+- **Action System** (custom GAS alternative): `USActionComponent` (`Actions`/`DefaultActions`, `AddAction`, `StartActionByName`/`StopActionByName`, `ActiveGameplayTags` container printed on-screen every tick for debugging) + `USAction` base (`UObject`, `Blueprintable`, `ActionName`, `StartAction`/`StopAction` as `BlueprintNativeEvent` that grant/remove `GrantsTage` on the owning component, `CanStart` blocks if already running or `ActiveGameplayTags.HasAny(BlockedTags)`, `IsRunning()`, `GetWorld()` via Outer chain); `ASCharacter` now only owns `ActionComp` — all ability logic, timers, and asset refs moved out of the character class
 - `USAction_ProjectileAttack`: consolidates "play montage → delay → spawn projectile toward crosshair" (shared by primary/blackhole/dash attacks); `BP_ActionMagicProjectile`/`BP_ActionBlackhole`/`BP_ActionDash` are data-only Blueprint subclasses
 - Sprint (Left Shift): `BP_ActionSprint` (extends `USAction`), adds/removes `BonusSpeed` on `MaxWalkSpeed`
 - `USGameplayFunctionLibrary`: `ApplyDamage` / `ApplyDirectionalDamage` (physics knockback via `AddImpulseAtLocation`, direction = `TraceEnd - TraceStart` normalized, not `ImpactNormal`) — replaces duplicated damage code across all projectiles
@@ -113,10 +113,7 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - **Console exec commands** (`UFUNCTION(Exec)`): `ASCharacter::HealSelf(float Amount)` heals player; `ASGameModeBase::KillAll()` kills all bots via `TActorIterator`; God mode via `CanBeDamaged` bool checked in `USAttributeComponent::ApplyHealthChange`
 - **Shooting accuracy fix**: aim trace (now in `USAction_ProjectileAttack::AttackDelay_Elapsed`) traces from the character's camera component location (not eye height); DotProduct check — if `HandToImpact` opposes camera forward, fall back to camera forward (fixes steep upward angle shooting into ground)
 - **Debug draw cleanup**: removed all `DrawDebugSphere`/`DrawDebugLine`/`DrawDebugString` calls from `SInteractionComponent`, `SGameModeBase`, `SAICharacter`; removed `#include "DrawDebugHelpers.h"` from all three
-
-## Roadmap (next up)
-
-- GameplayTags for action/state labeling (e.g. `Action.IsSprinting`, `DamageType.Melee.Slashing`) — next lecture topic
+- **GameplayTags & Parry (Lecture 17)**: `Status.Parrying` tag registered in `Config/DefaultGameplayTags.ini`; `ParryTag` + `TryParryReflect(AActor*)` live on the shared base `ASProjectileBase` (checks `OtherActor`'s `USActionComponent::ActiveGameplayTags.HasTag`, reverses `MovementComp->Velocity`, `SetInstigator(OtherActor)`) so both `AAMagicProjectile` and `ASAIProjectile` honor it without duplicating the check; `USAction_Parry` (C++ `USAction` subclass) grants `GrantsTage = Status.Parrying` on `StartAction` and auto-`StopAction`s after `ParryDuration` (0.3s) via a timer; `BP_ActionParry` is the data-only Blueprint child, bound to Right Mouse Button (`Config/DefaultInput.ini`) and added to `BP_Player`'s `ActionComp::DefaultActions`; `ASAICharacter` also got an `ActionComp` added so AI can be granted actions too (not yet used for AI-side parrying)
 - Grant actions dynamically at runtime (e.g. treasure chest grants a random ability) instead of only via `DefaultActions`
 - Migrate `UPawnSensingComponent` → AI Perception (deprecation warning)
 - Enhanced Input System migration

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Camera/CameraShakeBase.h"
 #include "GameFramework/Actor.h"
+#include "GameplayTagContainer.h"
 #include "SProjectileBase.generated.h"
 
 class USphereComponent;
@@ -39,6 +40,12 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	TSubclassOf<UCameraShakeBase> ImpactCameraShake;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Damage")
+	FGameplayTag ParryTag;
+
+	// Reflects this projectile back at its Instigator if OtherActor has ParryTag active. Returns true if parried.
+	bool TryParryReflect(AActor* OtherActor);
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Projectile")
 	void Explode();

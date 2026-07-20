@@ -13,6 +13,9 @@ void ASAIProjectile::OnActorOverlap(UPrimitiveComponent* OverlappedComponent, AA
 	bool bFromSweep, const FHitResult& SweepResult)
 {
 	if (!OtherActor || OtherActor == GetInstigator()) return;
+
+	if (TryParryReflect(OtherActor)) return;
+
 	if (OtherActor->IsA<ASProjectileBase>()) return;
 
 	// 防止 AI 互伤

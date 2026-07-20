@@ -4,6 +4,7 @@
 #include "SProjectileBase.h"
 #include "Components/SphereComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/ProjectileMovementComponent.h"
 
 AAMagicProjectile::AAMagicProjectile()
 {
@@ -16,6 +17,11 @@ void AAMagicProjectile::OnActorOverlap(UPrimitiveComponent* OverlappedComponent,
 {
 	if (OtherActor && OtherActor != GetInstigator())
 	{
+		if (TryParryReflect(OtherActor))
+		{
+			return;
+		}
+
 		if (OtherActor->IsA<ASProjectileBase>()) return;
 
 		// 防止友伤：发射者和目标是同类型（都是 AI）则跳过

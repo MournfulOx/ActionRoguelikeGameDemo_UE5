@@ -1,4 +1,5 @@
 #include "SProjectileBase.h"
+#include "SActionComponent.h"
 #include "Components/AudioComponent.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
@@ -23,6 +24,18 @@ ASProjectileBase::ASProjectileBase()
 	MovementComp->InitialSpeed = 2000.0f;
 	MovementComp->bRotationFollowsVelocity = true;
 	MovementComp->ProjectileGravityScale = 0.0f;
+}
+
+bool ASProjectileBase::TryParryReflect(AActor* OtherActor)
+{
+	USActionComponent* ActionComp = Cast<USActionComponent>(OtherActor->GetComponentByClass(USActionComponent::StaticClass()));
+	if (ActionComp && ActionComp->ActiveGameplayTags.HasTag(ParryTag))
+	{
+		MovementComp->Velocity = -MovementComp->Velocity;
+		SetInstigator(Cast<APawn>(OtherActor));
+		return true;
+	}
+	return false;
 }
 
 void ASProjectileBase::Explode_Implementation()

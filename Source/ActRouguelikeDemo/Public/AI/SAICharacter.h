@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "SActionComponent.h"
 #include "GameFramework/Character.h"
 #include "SAICharacter.generated.h"
 
@@ -10,6 +11,7 @@ class UPawnSensingComponent;
 class USAttributeComponent;
 class UUserWidget;
 class USWorldUserWidget;
+class USActionComponent;
 
 UCLASS()
 class ACTROUGUELIKEDEMO_API ASAICharacter : public ACharacter
@@ -52,6 +54,9 @@ protected:
 
 	UFUNCTION()
 	void OnPawnSeen(APawn* Pawn);
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	USActionComponent* ActionComp;
 
 	UFUNCTION()
 	void OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComp, float NewHealth, float Delta);

@@ -13,10 +13,11 @@ public:
 	AAMagicProjectile();
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "Attack")
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Damage")
 	float DamageAmount = 20.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Attack")
+	UPROPERTY(EditDefaultsOnly, Category = "Damage")
 	bool bDestroyOnBlockingHit = true;
 
 	UFUNCTION()
