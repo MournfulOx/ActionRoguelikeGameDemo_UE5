@@ -463,6 +463,34 @@ Parrying, built on Unreal's native `FGameplayTag` / `FGameplayTagContainer` syst
 
 **AI-side support (in place, not yet used):** `ASAICharacter` was also given a `USActionComponent* ActionComp` in the constructor, so AI minions could be granted `BP_ActionParry` too (matching the course's demo of two bots ping-ponging a projectile) — not currently wired into `BP_MinionRanged`'s default actions.
 
+### 27. Credits System & EQS Powerup Spawning (Assignment 5)
+
+An economy layer built on `PlayerState` so credits persist per-player rather than living on a pawn that gets destroyed/respawned.
+
+**`ASPlayerState`:**
+- `Credits` (`protected int32`, default 0) exposed only through `GetCredits()`, `AddCredits(int32 Delta)`, and `RemoveCredits(int32 Delta)` — the latter returns `false` (no-op) if the balance is insufficient, so callers can gate an action on a successful deduction
+- `FOnCreditsChanged` (`BlueprintAssignable`, three params: `PlayerState`, `NewCredits`, `Delta`) — broadcast from both `AddCredits` and `RemoveCredits`; UI subscribes instead of polling
+- `ASGameModeBase` sets `PlayerStateClass = ASPlayerState::StaticClass()` in its constructor
+
+**Kill rewards:**
+- `ASGameModeBase::OnActorKilled(AActor* VictimActor, AActor* Killer)` casts `Killer` to `APawn`, fetches its `PlayerState`, and calls `AddCredits(CreditsPerKill)` (default 20)
+- Called from `ASAICharacter::OnHealthChanged`'s death branch via `GetWorld()->GetAuthGameMode<ASGameModeBase>()` — keeps the reward logic centralized in GameMode rather than duplicated per enemy type
+
+**Spending & earning powerups:**
+- `ASHealthPotion::OnActivated_Implementation` now fetches the instigator's `PlayerState` and only heals if `RemoveCredits(CreditCost)` (default 50) succeeds
+- `ASCoin` (new, extends `ASPowerupActor`): on pickup, calls `AddCredits(CreditsAmount)` (default 80) on the instigator's `PlayerState`, then `HideAndCooldown()` — same respawn framework as the health potion
+
+**EQS-driven powerup population (`ASGameModeBase`):**
+- `StartPlay()` runs `PowerupSpawnQuery` (`Query_FindPowerupSpawn`) once via `UEnvQueryManager::RunEQSQuery` (`AllMatching` mode, unlike the bot spawner's `RandomBest5Pct`) — needs the full candidate set, not just the best few
+- `Query_FindPowerupSpawn`: SimpleGrid generator centered on `EnvQueryContext_Querier` (the GameMode itself, which sits at world origin), projected onto the NavMesh so points land on walkable ground
+- `OnPowerupSpawnQueryCompleted` randomly draws from the candidate locations until `DesiredPowerupCount` (default 10) is reached or candidates run out; each pick is rejected and re-drawn if it's closer than `RequiredPowerupDistance` (default 2000 cm) to any already-used location, preventing powerup clustering
+- A random class from `PowerupClasses` (`BP_HealthPotion`, `BP_Coin`) is spawned at each accepted location
+
+**`WBP_Credits`:**
+- `Event Construct`: `Get Player State` (by index 0) → `Cast To SPlayerState` → stores `MyPlayerState`; immediately calls `GetCredits()` to set the initial text (so a non-zero starting balance displays correctly, not just after the next change)
+- Binds a custom event to `MyPlayerState->OnCreditsChanged`; on fire, converts `NewCredits` to text and updates the same `Text` widget
+- Added to `WBP_Main_HUD` alongside `WBP_PlayerHealth` and `WBP_Crosshair`
+
 ### 16. Input Bindings
 
 Legacy axis/action input configured in `DefaultInput.ini`:
@@ -497,7 +525,9 @@ Source/ActRouguelikeDemo/
 │   ├── SAIProjectile.h         # AI ranged attack projectile
 │   ├── SDashProjectile.h       # Dash/teleport projectile
 │   ├── SPowerupActor.h         # Powerup base (interact, respawn timer, hide/show)
-│   ├── SHealthPotion.h         # Health potion (heals pawn, ignores full health)
+│   ├── SHealthPotion.h         # Health potion (heals pawn, costs Credits, ignores full health)
+│   ├── SCoin.h                 # Coin pickup — grants Credits to the instigator's PlayerState
+│   ├── SPlayerState.h          # Credits (protected int32), Add/RemoveCredits, OnCreditsChanged delegate
 │   ├── ExplosiveBarrel.h       # Physics barrel (reacts to damage)
 │   ├── SAttributeComponent.h  # RPG attribute component (Health/HealthMax, delegate, dead-guard)
 │   ├── SWorldUserWidget.h      # World-space widget base (NativeTick, ProjectWorldToScreen, DPI scale)
@@ -513,7 +543,7 @@ Source/ActRouguelikeDemo/
 │       ├── SBTService_CheckHealth.h     # BT Service: health fraction → LowHealth bool
 │       ├── SBTTask_RangedAttack.h       # BT Task: spawn projectile at target from Muzzle_01
 │       └── SBTTask_HealSelf.h           # BT Task: restore AI to full health
-├── SGameModeBase.h                      # GameMode: dynamic AI spawning via EQS + difficulty curve
+├── SGameModeBase.h                      # GameMode: dynamic AI spawning via EQS + difficulty curve, kill-credit rewards, EQS powerup spawning
 └── Private/
     ├── SCharacter.cpp
     ├── SInteractionComponent.cpp
@@ -526,6 +556,8 @@ Source/ActRouguelikeDemo/
     ├── SDashProjectile.cpp
     ├── SPowerupActor.cpp
     ├── SHealthPotion.cpp
+    ├── SCoin.cpp
+    ├── SPlayerState.cpp
     ├── ExplosiveBarrel.cpp
     ├── SAttributeComponent.cpp
     ├── SGameModeBase.cpp
@@ -551,10 +583,12 @@ Content/AI/
 ├── Query_FindNearbyLocation.uasset  # EQS: Donut + Distance + Trace → smart firing spot near player
 ├── Query_FindHidingSpot.uasset      # EQS: Donut + Trace (hidden from player) + Distance → flee destination
 ├── Query_FindBotSpawn.uasset        # EQS: spawn location for GameMode bot spawner
+├── Query_FindPowerupSpawn.uasset    # EQS: SimpleGrid around Querier, NavMesh-projected → powerup spawn candidates
 └── QueryContext_TargetActor.uasset  # EQS context returning the Blackboard TargetActor
 
 Content/Blueprint/
-├── BP_OwnGameMode.uasset            # GameMode Blueprint (MinionClass, SpawnBotQuery, DifficultyCurve)
+├── BP_OwnGameMode.uasset            # GameMode Blueprint (MinionClass, SpawnBotQuery, DifficultyCurve, PlayerStateClass, CreditsPerKill, PowerupSpawnQuery, PowerupClasses)
+├── BP_Coin.uasset                   # Coin pickup (extends SCoin) — grants Credits on pickup
 
 Content/Blueprint/
 ├── BP_MagicProjectile.uasset       # Primary projectile (audio, camera shake, casting FX)
@@ -578,7 +612,7 @@ Content/UI/
 ├── WBP_DamagePopup.uasset          # Floating damage numbers (world-space, random offset, animation)
 ├── WBP_Main_HUD.uasset             # HUD container (PlayerHealth + Crosshair + Credits + GameModeInfo)
 ├── WBP_GameModeInfo.uasset         # Game time display using GameState::GetServerWorldTimeSeconds
-├── WBP_Credits.uasset              # Credit display placeholder
+├── WBP_Credits.uasset              # Credits display, bound to PlayerState::OnCreditsChanged
 └── WBP_MinionHealth.uasset         # Enemy health bar (extends USWorldUserWidget, shown on first hit)
 
 Content/Material/
@@ -650,6 +684,7 @@ cd ActionRoguelikeGameDemo_UE5
 - [x] Refactored all attack/ability logic out of `ASCharacter` into standalone `USAction` subclasses — character class no longer owns projectile classes, anim montages, VFX refs, or attack timers
 - [x] Centralized damage application (`USGameplayFunctionLibrary`) — `ApplyDamage` / `ApplyDirectionalDamage`; fixed knockback direction bug (trace vector instead of impact normal) for consistent physics impulses on barrels and AI ragdolls
 - [x] GameplayTags & Parry system — `Status.Parrying` tag; `TryParryReflect` shared on `ASProjectileBase` (used by both player and AI projectiles); `USAction_Parry` self-expiring buff action, bound to Right Mouse Button
+- [x] Credits system & EQS powerup spawning (Assignment 5) — `ASPlayerState` (`Credits`, `OnCreditsChanged`); kill rewards via `ASGameModeBase::OnActorKilled`; `ASHealthPotion` spends Credits, `ASCoin` grants them; `Query_FindPowerupSpawn` EQS + min-distance filtering scatters powerups across the level; `WBP_Credits` UI
 - [ ] Migrate Pawn Sensing → AI Perception (deprecation warning)
 - [ ] Enhanced Input System migration (from legacy `BindAxis` / `BindAction`)
 - [ ] Networked multiplayer replication

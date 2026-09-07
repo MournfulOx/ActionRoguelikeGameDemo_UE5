@@ -35,18 +35,39 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, Category="AI")
 	float SpawnTimerInterval;
-	
+
+	UPROPERTY(EditDefaultsOnly, Category = "Credits")
+	int32 CreditsPerKill;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Powerups")
+	UEnvQuery* PowerupSpawnQuery;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Powerups")
+	TArray<TSubclassOf<AActor>> PowerupClasses;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Powerups")
+	int32 DesiredPowerupCount;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Powerups")
+	float RequiredPowerupDistance;
+
 	void SpawnBotTimerElapsed();
 
 	UFUNCTION()
 	void OnQueryCompleted(UEnvQueryInstanceBlueprintWrapper* QueryInstance, EEnvQueryStatus::Type QueryStatus);
-	
+
+	UFUNCTION()
+	void OnPowerupSpawnQueryCompleted(UEnvQueryInstanceBlueprintWrapper* QueryInstance, EEnvQueryStatus::Type QueryStatus);
+
 public:
-	
+
 	ASGameModeBase();
-	
+
 	virtual void StartPlay() override;
-	
+
 	UFUNCTION(Exec)
 	void KillAll();
+
+	UFUNCTION(BlueprintCallable, Category = "GameMode")
+	void OnActorKilled(AActor* VictimActor, AActor* Killer);
 };

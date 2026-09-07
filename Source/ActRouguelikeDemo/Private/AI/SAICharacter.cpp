@@ -6,6 +6,7 @@
 #include "BrainComponent.h"
 #include "Perception/PawnSensingComponent.h"
 #include "SAttributeComponent.h"
+#include "SGameModeBase.h"
 #include "SWorldUserWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/CapsuleComponent.h"
@@ -76,6 +77,12 @@ void ASAICharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponen
 		}
 
 		SetLifeSpan(DissolveDuration + 0.5f);
+
+		ASGameModeBase* GM = GetWorld()->GetAuthGameMode<ASGameModeBase>();
+		if (GM)
+		{
+			GM->OnActorKilled(this, InstigatorActor);
+		}
 	}
 }
 	

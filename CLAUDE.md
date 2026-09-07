@@ -94,7 +94,7 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - Projectile audio: `UAudioComponent` (looping flight), `ImpactSound` (`PlaySoundAtLocation`) on `SProjectileBase`
 - Casting particle: `SpawnEmitterAttached` at `Muzzle_01` on projectile spawn
 - Camera shake: `PlayWorldCameraShake` on `Explode_Implementation` in `SProjectileBase`
-- Health potion powerup: `ASPowerupActor` base (interact interface, 10s respawn timer) + `ASHealthPotion` child (heals pawn, ignores full health), `BP_HealthPotion` with `SM_PotionBottle`
+- Health potion powerup: `ASPowerupActor` base (interact interface, 10s respawn timer) + `ASHealthPotion` child (costs `CreditCost` Credits via `PlayerState->RemoveCredits`, heals pawn, ignores full health), `BP_HealthPotion` with `SM_PotionBottle`
 - Dynamic materials: `M_HitFlashDemo`, `MF_HitFlashDemo`, `M_HealthBar`, `M_DissoveEffect` (wired via `UMaterialInstanceDynamic`, `DissolveAmount` 1.0→-1.0), `M_PBRDemo`, `M_SineWave`
 - Enemy AI core: `ASAICharacter` + `ASAIController` + Behavior Tree / Blackboard; `NavMeshBoundsVolume` in level; `AIModule` + `GameplayTasks` added to Build.cs
 - AI targeting via sight: `UPawnSensingComponent`; `OnSeePawn` → writes `TargetActor` to Blackboard (Note: deprecated in favor of AI Perception — warning only)
@@ -114,7 +114,27 @@ Unreal Engine 5.6 · C++ · Blueprints · Git LFS
 - **Shooting accuracy fix**: aim trace (now in `USAction_ProjectileAttack::AttackDelay_Elapsed`) traces from the character's camera component location (not eye height); DotProduct check — if `HandToImpact` opposes camera forward, fall back to camera forward (fixes steep upward angle shooting into ground)
 - **Debug draw cleanup**: removed all `DrawDebugSphere`/`DrawDebugLine`/`DrawDebugString` calls from `SInteractionComponent`, `SGameModeBase`, `SAICharacter`; removed `#include "DrawDebugHelpers.h"` from all three
 - **GameplayTags & Parry (Lecture 17)**: `Status.Parrying` tag registered in `Config/DefaultGameplayTags.ini`; `ParryTag` + `TryParryReflect(AActor*)` live on the shared base `ASProjectileBase` (checks `OtherActor`'s `USActionComponent::ActiveGameplayTags.HasTag`, reverses `MovementComp->Velocity`, `SetInstigator(OtherActor)`) so both `AAMagicProjectile` and `ASAIProjectile` honor it without duplicating the check; `USAction_Parry` (C++ `USAction` subclass) grants `GrantsTage = Status.Parrying` on `StartAction` and auto-`StopAction`s after `ParryDuration` (0.3s) via a timer; `BP_ActionParry` is the data-only Blueprint child, bound to Right Mouse Button (`Config/DefaultInput.ini`) and added to `BP_Player`'s `ActionComp::DefaultActions`; `ASAICharacter` also got an `ActionComp` added so AI can be granted actions too (not yet used for AI-side parrying)
+- **Credits system & EQS powerup spawning (Assignment 5)**: `ASPlayerState` (`Credits` protected int32, `GetCredits`/`AddCredits`/`RemoveCredits` — the latter balance-checked, returns `bool`; `OnCreditsChanged` 3-param `BlueprintAssignable` delegate); `ASGameModeBase` sets `PlayerStateClass = ASPlayerState::StaticClass()`, awards `CreditsPerKill` (20) via `OnActorKilled(VictimActor, Killer)` called from `ASAICharacter::OnHealthChanged`'s death branch; `ASHealthPotion` now spends `CreditCost` (50) via `RemoveCredits` before healing; `ASCoin` (new, extends `ASPowerupActor`) grants `CreditsAmount` (80) via `AddCredits`, `BP_Coin`; EQS-driven powerup population — `StartPlay()` runs `PowerupSpawnQuery` (`Query_FindPowerupSpawn`, SimpleGrid around `EnvQueryContext_Querier`, NavMesh-projected, `AllMatching` mode) once, `OnPowerupSpawnQueryCompleted` randomly draws `DesiredPowerupCount` (10) locations from `PowerupClasses`, rejecting picks closer than `RequiredPowerupDistance` (2000) to an already-used spot; `WBP_Credits` UI casts `PlayerState` in `Construct`, sets initial text via `GetCredits()`, then binds a custom event to `OnCreditsChanged` for live updates
+## Roadmap
+
+Next up — **Lecture 18: Creating "Buffs", World Interaction**(Assignment 5 补完,现在真正进入本课正题)
+
 - Grant actions dynamically at runtime (e.g. treasure chest grants a random ability) instead of only via `DefaultActions`
 - Migrate `UPawnSensingComponent` → AI Perception (deprecation warning)
 - Enhanced Input System migration
 - Additional interactables and pick-ups
+
+Course roadmap (Tom Looman's UE5 C++ Action Roguelike, remaining lectures):
+- Lecture 18 — Creating "Buffs", World Interaction
+- Lecture 19 — Multiplayer 1: Network Replication
+- Lecture 20 — Multiplayer 2
+- Lecture 21 — Multiplayer 3
+- Lecture 22 — Finishing up Multiplayer
+- Lecture 23 — Serializing Game & Player Progression
+- Lecture 24 — Building Menus in UMG
+- Lecture 25 — UMG & Styling Widgets
+- Lecture 26 — Animation Blueprints & UI Improvements
+- Lecture 27 — Data Assets, Data Tables, Async Loading (Asset Manager)
+- Lecture 28 — Packaging, Performance, Polish
+- Lecture 29 — Wrapping Up
+- Additional Features (bonus content)

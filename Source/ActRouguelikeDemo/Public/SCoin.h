@@ -2,22 +2,19 @@
 
 #include "CoreMinimal.h"
 #include "SPowerupActor.h"
-#include "SHealthPotion.generated.h"
+#include "SCoin.generated.h"
 
 UCLASS()
-class ACTROUGUELIKEDEMO_API ASHealthPotion : public ASPowerupActor
+class ACTROUGUELIKEDEMO_API ASCoin : public ASPowerupActor
 {
 	GENERATED_BODY()
 
 public:
-	ASHealthPotion();
+	ASCoin();
 
 protected:
 	UPROPERTY(EditAnywhere, Category = "Powerup")
-	float HealAmount;
-
-	UPROPERTY(EditAnywhere, Category = "Powerup")
-	int32 CreditCost;
+	int32 CreditsAmount;
 
 	void OnActivated_Implementation(APawn* InstigatorPawn) override;
 };
